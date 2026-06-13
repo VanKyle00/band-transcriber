@@ -43,6 +43,7 @@ function AlphaTexTab({ url }: { url: string }) {
         const tex = await (await fetch(url)).text();
         if (cancelled || !ref.current) return;
         const alphaTab = await import("@coderline/alphatab");
+        if (cancelled || !ref.current) return;
         api = new alphaTab.AlphaTabApi(ref.current, {
           core: {
             useWorkers: false,
