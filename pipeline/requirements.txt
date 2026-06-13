@@ -1,0 +1,11 @@
+# Runtime deps for the processing pipeline (installed into the Modal image).
+# torch is installed separately in modal_app.py with the matching CUDA build.
+demucs==4.0.1
+basic-pitch==0.4.0
+music21==9.3.0
+librosa==0.10.2
+pretty_midi==0.2.10
+soundfile==0.12.1
+numpy>=1.24,<2.0
+yt-dlp>=2025.1.1
+supabase>=2.4,<3.0

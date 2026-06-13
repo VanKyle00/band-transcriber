@@ -1,0 +1,27 @@
+# Node / Next
+node_modules/
+.next/
+*.tsbuildinfo
+next-env.d.ts
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+
+# Pipeline output / scratch
+bt-out/
+*.wav
+*.mid
+*.musicxml
+
+# Env / secrets
+.env
+.env.local
+.env*.local
+
+# OS
+.DS_Store
+Thumbs.db
