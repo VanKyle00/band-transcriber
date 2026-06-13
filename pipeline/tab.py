@@ -16,6 +16,12 @@ def _pitch_letter(midi: int) -> str:
     return _PITCH_LETTERS[midi % 12]
 
 
+def _alphatab_pitch(midi: int) -> str:
+    """alphaTab note name: letter + alphaTab octave (= midi // 12, one above
+    scientific pitch — matches alphaTab's `\\tuning` convention)."""
+    return f"{_PITCH_LETTERS[midi % 12]}{midi // 12}"
+
+
 def _placements(pitch: int, tuning: list[int]) -> list[tuple[int, int]]:
     """All (string_index, fret) positions that can sound `pitch` on this tuning."""
     out = []
@@ -101,6 +107,33 @@ def render_tab(placements: list[dict[int, int]], tuning: list[int],
     return "\n\n".join(blocks)
 
 
+def render_alphatex(placements: list[dict[int, int]], tuning: list[int],
+                    beats_per_bar: int = 4) -> str:
+    """Render assigned columns as AlphaTex (alphaTab's text format).
+
+    AlphaTex string 1 is the highest-pitched string, so our low-string-first
+    index `idx` maps to AlphaTex string `n - idx`; the tuning is listed high->low.
+    Durations are fixed at one quarter-note beat per column (same fidelity as the
+    ASCII tab); a column with no playable note becomes a rest.
+    """
+    n = len(tuning)
+    names = " ".join(_alphatab_pitch(tuning[i]) for i in range(n - 1, -1, -1))
+
+    beats: list[str] = []
+    for col in placements:
+        if not col:
+            beats.append("r")
+            continue
+        notes = [f"{fret}.{n - idx}" for idx, fret in sorted(col.items())]
+        beats.append(notes[0] if len(notes) == 1 else "(" + " ".join(notes) + ")")
+
+    if not beats:
+        beats = ["r"]
+    bars = [" ".join(beats[i:i + beats_per_bar])
+            for i in range(0, len(beats), beats_per_bar)]
+    return f"\\tuning {names}\n:4 " + " | ".join(bars)
+
+
 def notes_to_tab(notes, tuning: list[int], columns_per_line: int = 16) -> str:
     """Full pipeline: (start, pitch) notes -> ASCII tab string."""
     columns = _group_columns(notes)
@@ -108,14 +141,25 @@ def notes_to_tab(notes, tuning: list[int], columns_per_line: int = 16) -> str:
     return render_tab(placements, tuning, columns_per_line)
 
 
-def midi_to_ascii_tab(midi_path: str, tuning: list[int]) -> str:
-    """Read a MIDI file and produce ASCII tab. Requires pretty_midi at runtime."""
+def _read_midi_notes(midi_path: str) -> list[tuple[float, int]]:
+    """Read (start_seconds, pitch) for all non-drum notes. Requires pretty_midi."""
     import pretty_midi
 
     pm = pretty_midi.PrettyMIDI(midi_path)
-    notes = [
+    return [
         (note.start, note.pitch)
         for inst in pm.instruments if not inst.is_drum
         for note in inst.notes
     ]
-    return notes_to_tab(notes, tuning)
+
+
+def midi_to_ascii_tab(midi_path: str, tuning: list[int]) -> str:
+    """Read a MIDI file and produce ASCII tab."""
+    return notes_to_tab(_read_midi_notes(midi_path), tuning)
+
+
+def midi_to_tabs(midi_path: str, tuning: list[int]) -> tuple[str, str]:
+    """Read a MIDI file once; return (ascii_tab, alphatex) from the same placements."""
+    columns = _group_columns(_read_midi_notes(midi_path))
+    placements = assign_columns(columns, tuning)
+    return render_tab(placements, tuning), render_alphatex(placements, tuning)

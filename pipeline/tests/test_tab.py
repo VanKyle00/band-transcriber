@@ -5,7 +5,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from pipeline.config import BASS_TUNING, GUITAR_TUNING
-from pipeline.tab import _placements, assign_columns, notes_to_tab, render_tab
+from pipeline.tab import _placements, assign_columns, notes_to_tab, render_alphatex, render_tab
 
 
 def test_placements_open_string():
@@ -52,6 +52,40 @@ def test_render_has_one_line_per_string():
 def test_notes_to_tab_contains_fret():
     out = notes_to_tab([(0.0, 40), (0.5, 47)], GUITAR_TUNING)
     assert "0" in out and "|" in out
+
+
+def test_render_alphatex_header_and_single_note():
+    # idx 0 is the low-E string -> AlphaTex string 6. Tuning lists high->low,
+    # alphaTab octave = midi // 12 (one above scientific).
+    tex = render_alphatex([{0: 0}], GUITAR_TUNING)
+    assert tex == "\\tuning E5 B4 G4 D4 A3 E3\n:4 0.6"
+
+
+def test_render_alphatex_string_numbering():
+    # Low-E string (idx 0) -> string 6; high-E string (idx 5) -> string 1.
+    assert render_alphatex([{0: 3}], GUITAR_TUNING).endswith("3.6")
+    assert render_alphatex([{5: 0}], GUITAR_TUNING).endswith("0.1")
+
+
+def test_render_alphatex_chord():
+    # A column with several strings becomes a parenthesised beat, low string first.
+    tex = render_alphatex([{0: 0, 1: 2, 2: 2}], GUITAR_TUNING)
+    assert "(0.6 2.5 2.4)" in tex
+
+
+def test_render_alphatex_empty_column_is_rest():
+    assert render_alphatex([{}], GUITAR_TUNING).endswith(":4 r")
+
+
+def test_render_alphatex_inserts_barlines():
+    # 5 beats at 4 beats/bar -> exactly one bar separator.
+    tex = render_alphatex([{0: 0}] * 5, GUITAR_TUNING)
+    assert tex.count(" | ") == 1
+
+
+def test_render_alphatex_bass_tuning():
+    tex = render_alphatex([{0: 0}], BASS_TUNING)
+    assert tex == "\\tuning G3 D3 A2 E2\n:4 0.4"
 
 
 if __name__ == "__main__":
