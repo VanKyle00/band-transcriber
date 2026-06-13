@@ -7,6 +7,7 @@ export type StemArtifacts = {
   musicxml?: string;
   sheet_pdf?: string;
   tab?: string;
+  tab_alphatex?: string;
 };
 
 export type JobStatus = "queued" | "processing" | "done" | "error";

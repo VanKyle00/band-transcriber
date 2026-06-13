@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@coderline/alphatab": "1.8.3",
     "@supabase/supabase-js": "^2.45.0",
     "html-midi-player": "^1.5.0",
     "next": "^15.3.0",
