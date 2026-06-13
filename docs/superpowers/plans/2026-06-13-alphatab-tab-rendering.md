@@ -363,6 +363,7 @@ Replace the entire contents of `apps/web/components/Tab.tsx` with:
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import type { AlphaTabApi } from "@coderline/alphatab";
 
 // Tab renders two ways:
 //  - if an AlphaTex artifact exists, alphaTab engraves an interactive staff + tab
@@ -397,7 +398,7 @@ function AlphaTexTab({ url }: { url: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    let api: { destroy: () => void } | undefined;
+    let api: AlphaTabApi | undefined;
 
     (async () => {
       try {
@@ -411,8 +412,7 @@ function AlphaTexTab({ url }: { url: string }) {
               "https://cdn.jsdelivr.net/npm/@coderline/alphatab@1.8.3/dist/font/",
           },
           player: { enablePlayer: false },
-          // alphaTab accepts this JSON settings form at runtime; cast if tsc objects.
-        } as unknown as ConstructorParameters<typeof alphaTab.AlphaTabApi>[1]);
+        });
         api.tex(tex);
       } catch {
         if (!cancelled) setError("Failed to render tab.");
@@ -461,7 +461,7 @@ to:
 - [ ] **Step 3: Verify the type-check passes**
 
 Run: `cd apps/web && npx tsc --noEmit`
-Expected: PASS. If the `AlphaTabApi` settings argument errors, replace the `as unknown as ...` cast with `as any` — alphaTab accepts the JSON settings object at runtime.
+Expected: PASS. `AlphaTabApi` is brought in via `import type` (erased at runtime, so it never evaluates the browser-only module during SSR). If the settings object argument is flagged by tsc, append ` as any` to the settings object literal — alphaTab accepts the JSON settings form at runtime.
 
 - [ ] **Step 4: Verify the production build passes**
 
