@@ -55,7 +55,9 @@ export default function StemPanel({ stem }: { stem: StemArtifacts }) {
         </div>
       )}
 
-      {view === "sheet" && stem.musicxml && <SheetMusic url={stem.musicxml} />}
+      {view === "sheet" && stem.musicxml && (
+        <SheetMusic url={stem.musicxml} audioUrl={stem.audio} />
+      )}
       {view === "sheet" && !stem.musicxml && stem.sheet_svg && (
         <div className="drum-sheet">
           <img src={stem.sheet_svg} alt={`${stem.name} notation`} />
@@ -68,8 +70,9 @@ export default function StemPanel({ stem }: { stem: StemArtifacts }) {
         <PianoRoll url={stem.midi} audioUrl={stem.audio} id={stem.name} />
       )}
 
-      {/* The piano roll carries its own synced player; show the plain one elsewhere. */}
-      {view !== "roll" && stem.audio && (
+      {/* Piano roll and the interactive sheet carry their own synced player; show the
+          plain one for the other views (tab, and the drum SVG sheet). */}
+      {!(view === "roll" || (view === "sheet" && stem.musicxml)) && stem.audio && (
         <audio controls src={stem.audio} style={{ width: "100%", marginTop: 14 }} />
       )}
 
