@@ -12,7 +12,7 @@ type View = "sheet" | "tab" | "roll";
 export default function StemPanel({ stem }: { stem: StemArtifacts }) {
   // Default to whatever this stem actually produced.
   const available: View[] = [
-    stem.musicxml || stem.sheet_svg ? ("sheet" as const) : null,
+    stem.musicxml ? ("sheet" as const) : null,
     stem.tab || stem.tab_alphatex ? ("tab" as const) : null,
     stem.midi ? ("roll" as const) : null,
   ].filter(Boolean) as View[];
@@ -57,11 +57,6 @@ export default function StemPanel({ stem }: { stem: StemArtifacts }) {
 
       {view === "sheet" && stem.musicxml && (
         <SheetMusic url={stem.musicxml} audioUrl={stem.audio} />
-      )}
-      {view === "sheet" && !stem.musicxml && stem.sheet_svg && (
-        <div className="drum-sheet">
-          <img src={stem.sheet_svg} alt={`${stem.name} notation`} />
-        </div>
       )}
       {view === "tab" && (stem.tab || stem.tab_alphatex) && (
         <Tab url={stem.tab} alphatexUrl={stem.tab_alphatex} />

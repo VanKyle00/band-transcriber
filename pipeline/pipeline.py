@@ -69,13 +69,13 @@ def process_stem(stem_name: str, stem_wav: Path, workdir: Path, job_id: str,
     out["midi"] = storage.upload_artifact(midi, job_id)
 
     if spec.clef == "percussion":
-        # Drums get real percussion notation (LilyPond drum staff) — a PDF to download and
-        # an SVG shown inline. music21's MusicXML->LilyPond path can't engrave percussion.
+        # Drums get real percussion notation: a MusicXML the browser renders interactively
+        # with OSMD (so the playback cursor works), plus a LilyPond-engraved PDF to download.
         try:
-            pdf, svg = drumnotation.render_drum_notation(
-                midi, sdir / f"{stem_name}.pdf", sdir / f"{stem_name}.svg")
+            xml = drumnotation.render_drum_musicxml(midi, sdir / f"{stem_name}.musicxml")
+            out["musicxml"] = storage.upload_artifact(xml, job_id)
+            pdf = drumnotation.render_drum_pdf(midi, sdir / f"{stem_name}.pdf")
             out["sheet_pdf"] = storage.upload_artifact(pdf, job_id)
-            out["sheet_svg"] = storage.upload_artifact(svg, job_id)
         except Exception as exc:
             out["warnings"].append(f"drum notation failed: {exc}")
     elif "musicxml" in spec.outputs or "sheet" in spec.outputs:
