@@ -13,7 +13,7 @@ export default function StemPanel({ stem }: { stem: StemArtifacts }) {
   // Default to whatever this stem actually produced.
   const available: View[] = [
     stem.musicxml ? ("sheet" as const) : null,
-    stem.tab ? ("tab" as const) : null,
+    stem.tab || stem.tab_alphatex ? ("tab" as const) : null,
     stem.midi ? ("roll" as const) : null,
   ].filter(Boolean) as View[];
 
@@ -56,7 +56,9 @@ export default function StemPanel({ stem }: { stem: StemArtifacts }) {
       )}
 
       {view === "sheet" && stem.musicxml && <SheetMusic url={stem.musicxml} />}
-      {view === "tab" && stem.tab && <Tab url={stem.tab} />}
+      {view === "tab" && (stem.tab || stem.tab_alphatex) && (
+        <Tab url={stem.tab} alphatexUrl={stem.tab_alphatex} />
+      )}
       {view === "roll" && stem.midi && <PianoRoll url={stem.midi} id={stem.name} />}
 
       {stem.audio && (

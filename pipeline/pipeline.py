@@ -15,25 +15,28 @@ from .config import DEFAULT_STEMS, OPENFRET_STEMS, STEMS
 from .transcribe import transcribe
 
 
-def _build_tab(stem_name: str, midi: Path, spec) -> tuple[str | None, str | None]:
-    """Generate tab text for a stem. Returns (tab_text, warning).
+def _build_tab(stem_name: str, midi: Path, spec) -> tuple[str | None, str | None, str | None]:
+    """Generate tab for a stem. Returns (ascii_tab, alphatex, warning).
 
-    Uses open-fret's learned fingering when configured + available, falling back to
-    the deterministic assigner. Returns (None, warning) only if even the fallback fails.
+    Uses open-fret's learned fingering when configured + available (ASCII only for
+    now — see the design's non-goals), falling back to the deterministic assigner
+    which produces both ASCII and AlphaTex. (None, None, warning) only if even the
+    fallback fails.
     """
     if stem_name in OPENFRET_STEMS and opentab.available():
         try:
-            return opentab.midi_to_tab_openfret(midi), None
+            return opentab.midi_to_tab_openfret(midi), None, None
         except Exception as exc:
             warn = f"open-fret failed, used heuristic tab: {exc}"
             try:
-                return tab.midi_to_ascii_tab(str(midi), spec.tuning), warn
+                return tab.midi_to_ascii_tab(str(midi), spec.tuning), None, warn
             except Exception as exc2:
-                return None, f"tab failed: {exc2}"
+                return None, None, f"tab failed: {exc2}"
     try:
-        return tab.midi_to_ascii_tab(str(midi), spec.tuning), None
+        ascii_tab, alphatex = tab.midi_to_tabs(str(midi), spec.tuning)
+        return ascii_tab, alphatex, None
     except Exception as exc:
-        return None, f"tab failed: {exc}"
+        return None, None, f"tab failed: {exc}"
 
 
 def process_stem(stem_name: str, stem_wav: Path, workdir: Path, job_id: str,
@@ -77,11 +80,15 @@ def process_stem(stem_name: str, stem_wav: Path, workdir: Path, job_id: str,
             out["warnings"].append(f"notation failed: {exc}")
 
     if "tab" in spec.outputs and spec.tuning:
-        tab_text, warn = _build_tab(stem_name, midi, spec)
-        if tab_text is not None:
+        ascii_tab, alphatex, warn = _build_tab(stem_name, midi, spec)
+        if ascii_tab is not None:
             tab_txt = sdir / f"{stem_name}.tab.txt"
-            tab_txt.write_text(tab_text, encoding="utf-8")
+            tab_txt.write_text(ascii_tab, encoding="utf-8")
             out["tab"] = storage.upload_artifact(tab_txt, job_id)
+        if alphatex is not None:
+            tab_tex = sdir / f"{stem_name}.alphatex"
+            tab_tex.write_text(alphatex, encoding="utf-8")
+            out["tab_alphatex"] = storage.upload_artifact(tab_tex, job_id)
         if warn:
             out["warnings"].append(warn)
 

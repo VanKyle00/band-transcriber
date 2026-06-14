@@ -19,6 +19,7 @@ _MIME = {
     ".midi": "audio/midi", ".pdf": "application/pdf",
     ".musicxml": "application/vnd.recordare.musicxml+xml",
     ".xml": "application/xml", ".txt": "text/plain", ".json": "application/json",
+    ".alphatex": "text/plain",
 }
 
 
