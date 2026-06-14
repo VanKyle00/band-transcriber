@@ -9,8 +9,6 @@ Topology (cost-aware):
 Deploy:  modal deploy modal_app.py
 Test:    modal run modal_app.py::process_job --job-id test --source song.wav --is-url false
 """
-from __future__ import annotations
-
 import os
 import uuid
 
@@ -87,7 +85,11 @@ def separate_audio(input_wav: bytes) -> dict[str, bytes]:
     return {name: path.read_bytes() for name, path in stems.items()}
 
 
-@app.function(image=mt3_image, gpu="L4", timeout=1800)
+# MT3 disabled in this deployment: t5x@main now requires flax>=py3.11 but mt3_image
+# pins py3.10, so `pip install -e /opt/t5x` fails to build and aborts the whole deploy.
+# Guitar/piano therefore fall back to basic-pitch (the documented no-MT3 path). With the
+# @app.function decorator removed, mt3_image is unattached and never built. Re-enable by
+# restoring the decorator with validated jax/flax/orbax pins (try python_version="3.11").
 def mt3_to_midi(stem_name: str, wav_bytes: bytes) -> bytes:
     """GPU: transcribe one polyphonic stem (guitar/piano) to MIDI with MT3."""
     import tempfile
@@ -135,7 +137,6 @@ def process_job(job_id: str, source: str, is_url: bool, stems: list[str],
     from pathlib import Path
 
     from pipeline import download, storage
-    from pipeline.config import MT3_STEMS
 
     work = Path(tempfile.mkdtemp())
     try:
@@ -154,19 +155,10 @@ def process_job(job_id: str, source: str, is_url: bool, stems: list[str],
         storage.update_job(job_id, stage="transcribing")
         available = [n for n in stems if n in stem_bytes]
 
-        # Kick off MT3 (GPU) for polyphonic stems first so they run in parallel with
-        # the CPU stems' rendering.
-        mt3_calls = {n: mt3_to_midi.spawn(n, stem_bytes[n]) for n in available if n in MT3_STEMS}
-        render_calls = [
-            transcribe_stem.spawn(n, stem_bytes[n], job_id)
-            for n in available if n not in MT3_STEMS
-        ]
-        for name, call in mt3_calls.items():
-            try:
-                midi = call.get()
-            except Exception:
-                midi = None  # MT3 failed -> transcribe_stem falls back to basic-pitch
-            render_calls.append(transcribe_stem.spawn(name, stem_bytes[name], job_id, midi))
+        # MT3 is disabled in this deployment (see mt3_to_midi above): its JAX/T5X image
+        # fails to build on Modal. Every stem — incl. guitar/piano — renders via the CPU
+        # transcribe_stem path, which uses basic-pitch for the polyphonic stems.
+        render_calls = [transcribe_stem.spawn(n, stem_bytes[n], job_id) for n in available]
 
         results = [c.get() for c in render_calls]
         artifacts = {"stems": results}
@@ -181,11 +173,17 @@ def process_job(job_id: str, source: str, is_url: bool, stems: list[str],
 @modal.asgi_app()
 def web():
     from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+    from fastapi.middleware.cors import CORSMiddleware
 
     from pipeline import storage
     from pipeline.config import DEFAULT_STEMS, STEMS
 
     api = FastAPI(title="Band Transcriber")
+    # The browser uploads files directly to this endpoint because Vercel caps proxied
+    # request bodies at 4.5 MB. Allow cross-origin requests from the web app.
+    api.add_middleware(
+        CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
+    )
 
     @api.post("/jobs")
     async def create(
