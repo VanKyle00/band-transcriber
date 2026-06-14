@@ -56,6 +56,13 @@ def _lilypond(slots: list[set[str]]) -> str:
     return (
         '\\version "2.24.0"\n'
         "#(set-global-staff-size 18)\n"
+        # Keep the whole chart on one (tall) page so multi-page output never drops bars;
+        # the SVG is then cropped to the music. line-width wraps bars into systems.
+        "\\paper {\n"
+        "  page-breaking = #ly:one-page-breaking\n"
+        "  indent = 0\n"
+        "  line-width = 180\\mm\n"
+        "}\n"
         "\\score {\n"
         "  \\new DrumStaff \\drummode {\n"
         "    \\time 4/4\n"
@@ -73,15 +80,14 @@ def render_drum_notation(midi_path: Path, out_pdf: Path, out_svg: Path) -> tuple
     ly = work / "drums.ly"
     ly.write_text(_lilypond(_slots(midi_path)), encoding="utf-8")
     base = work / "drums_render"
-    for fmt in ("svg", "pdf"):
-        subprocess.run(
-            ["lilypond", f"--{fmt}", "-dno-point-and-click", "-o", str(base), str(ly)],
-            check=True, capture_output=True,
-        )
-    # LilyPond writes <base>.svg / <base>.pdf for a single page; glob as a fallback.
-    svg = base.with_suffix(".svg")
-    if not svg.exists():
-        svg = next(work.glob(f"{base.name}*.svg"))
+    # SVG cropped to the music (so it isn't a tall, mostly-blank A4 page); PDF for download.
+    subprocess.run(["lilypond", "--svg", "-dcrop=#t", "-dno-point-and-click", "-o", str(base), str(ly)],
+                   check=True, capture_output=True)
+    subprocess.run(["lilypond", "--pdf", "-dno-point-and-click", "-o", str(base), str(ly)],
+                   check=True, capture_output=True)
+    svg = work / f"{base.name}.cropped.svg"
+    if not svg.exists():  # fall back to any cropped/page SVG LilyPond produced
+        svg = next(work.glob(f"{base.name}*cropped.svg"), None) or next(work.glob(f"{base.name}*.svg"))
     svg.replace(out_svg)
     base.with_suffix(".pdf").replace(out_pdf)
     return out_pdf, out_svg

@@ -16,7 +16,7 @@ JOB_TTL_HOURS = 24
 
 _MIME = {
     ".wav": "audio/wav", ".mp3": "audio/mpeg", ".mid": "audio/midi",
-    ".midi": "audio/midi", ".pdf": "application/pdf",
+    ".midi": "audio/midi", ".pdf": "application/pdf", ".svg": "image/svg+xml",
     ".musicxml": "application/vnd.recordare.musicxml+xml",
     ".xml": "application/xml", ".txt": "text/plain", ".json": "application/json",
     ".alphatex": "text/plain",
