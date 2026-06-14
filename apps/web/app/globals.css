@@ -88,6 +88,9 @@ pre.tab {
 .osmd { background: #fff; border-radius: 8px; padding: 8px; overflow-x: auto; }
 /* alphaTab draws dark notation glyphs, so it needs a light surface like the score. */
 .alphatab { background: #fff; border-radius: 8px; padding: 12px; overflow-x: auto; }
+/* Drum notation engraved by LilyPond, shown inline as an image. */
+.drum-sheet { background: #fff; border-radius: 8px; padding: 10px; overflow-x: auto; }
+.drum-sheet img { max-width: 100%; height: auto; display: block; }
 
 /* Piano roll */
 .pianoroll { margin-top: 4px; }

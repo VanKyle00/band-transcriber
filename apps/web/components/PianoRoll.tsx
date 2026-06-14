@@ -13,6 +13,9 @@ const NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const noteName = (midi: number) => `${NAMES[midi % 12]}${Math.floor(midi / 12) - 1}`;
 const isBlackKey = (midi: number) => [1, 3, 6, 8, 10].includes(midi % 12);
 
+// Drums aren't pitched: each GM percussion note is a kit piece. Label rows by piece.
+const DRUM_LABELS: Record<number, string> = { 36: "Kick", 38: "Snare", 42: "Hi-hat" };
+
 const ROW = 12; // px per semitone
 
 export default function PianoRoll({
@@ -60,6 +63,7 @@ export default function PianoRoll({
   const height = rows * ROW;
   const width = Math.max(duration * pxPerSec, 240);
   const yOf = (midi: number) => (maxMidi - midi) * ROW;
+  const isDrums = id === "drums";
 
   function seek(e: React.MouseEvent<SVGSVGElement>) {
     if (!audio.current) return;
@@ -84,9 +88,10 @@ export default function PianoRoll({
         <div className="pr-axis">
           {Array.from({ length: rows }, (_, i) => {
             const m = maxMidi - i;
+            const label = isDrums ? DRUM_LABELS[m] : m % 12 === 0 ? noteName(m) : undefined;
             return (
-              <div key={m} className={`pr-axis-row${isBlackKey(m) ? " black" : ""}`} style={{ height: ROW }}>
-                {m % 12 === 0 && <span>{noteName(m)}</span>}
+              <div key={m} className={`pr-axis-row${!isDrums && isBlackKey(m) ? " black" : ""}`} style={{ height: ROW }}>
+                {label && <span>{label}</span>}
               </div>
             );
           })}

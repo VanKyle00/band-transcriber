@@ -6,6 +6,7 @@ export type StemArtifacts = {
   midi?: string;
   musicxml?: string;
   sheet_pdf?: string;
+  sheet_svg?: string;
   tab?: string;
   tab_alphatex?: string;
 };
