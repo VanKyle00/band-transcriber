@@ -35,29 +35,10 @@ def _apply_clef(score, clef_name: str) -> None:
         break
 
 
-def _depercuss(midi_path: Path) -> Path:
-    """Rewrite a drum MIDI as a *pitched* MIDI for engraving only.
-
-    music21's LilyPond exporter crashes on multi-measure percussion (Unpitched) parts
-    (lily/translate.py: ``self.context.contents`` is None). Pitched parts engrave fine,
-    so for the score we drop the drum flag — GM percussion pitches then land on the
-    staff. The uploaded MIDI artifact keeps its real percussion track.
-    """
-    import pretty_midi
-
-    pm = pretty_midi.PrettyMIDI(str(midi_path))
-    for inst in pm.instruments:
-        inst.is_drum = False
-    out = midi_path.with_name(midi_path.stem + ".pitched.mid")
-    pm.write(str(out))
-    return out
-
-
 def midi_to_musicxml(midi_path: Path, out_xml: Path, clef_name: str = "treble") -> Path:
     from music21 import converter
 
-    src = _depercuss(midi_path) if clef_name == "percussion" else midi_path
-    score = converter.parse(str(src))
+    score = converter.parse(str(midi_path))
     _apply_clef(score, clef_name)
     out_xml.parent.mkdir(parents=True, exist_ok=True)
     score.write("musicxml", fp=str(out_xml))

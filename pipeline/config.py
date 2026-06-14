@@ -38,7 +38,7 @@ class StemSpec:
 STEMS: dict[str, StemSpec] = {
     "drums": StemSpec(
         name="drums", transcriber="drums",
-        outputs=("midi", "musicxml", "sheet", "pianoroll", "audio"), clef="percussion",
+        outputs=("midi", "sheet", "pianoroll", "audio"), clef="percussion",
     ),
     "bass": StemSpec(
         name="bass", transcriber="melodic", polyphonic=False,

@@ -10,7 +10,7 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from . import download, notation, opentab, separate, storage, tab
+from . import download, drumnotation, notation, opentab, separate, storage, tab
 from .config import DEFAULT_STEMS, OPENFRET_STEMS, STEMS
 from .transcribe import transcribe
 
@@ -68,7 +68,17 @@ def process_stem(stem_name: str, stem_wav: Path, workdir: Path, job_id: str,
             return out
     out["midi"] = storage.upload_artifact(midi, job_id)
 
-    if "musicxml" in spec.outputs or "sheet" in spec.outputs:
+    if spec.clef == "percussion":
+        # Drums get real percussion notation (LilyPond drum staff) — a PDF to download and
+        # an SVG shown inline. music21's MusicXML->LilyPond path can't engrave percussion.
+        try:
+            pdf, svg = drumnotation.render_drum_notation(
+                midi, sdir / f"{stem_name}.pdf", sdir / f"{stem_name}.svg")
+            out["sheet_pdf"] = storage.upload_artifact(pdf, job_id)
+            out["sheet_svg"] = storage.upload_artifact(svg, job_id)
+        except Exception as exc:
+            out["warnings"].append(f"drum notation failed: {exc}")
+    elif "musicxml" in spec.outputs or "sheet" in spec.outputs:
         try:
             xml = notation.midi_to_musicxml(midi, sdir / f"{stem_name}.musicxml", spec.clef)
             if "musicxml" in spec.outputs:
