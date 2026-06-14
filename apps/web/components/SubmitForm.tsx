@@ -37,9 +37,13 @@ export default function SubmitForm() {
 
     setBusy(true);
     try {
-      const res = await fetch("/api/jobs", { method: "POST", body: fd });
+      // Post directly to the Modal endpoint when configured, so large uploads bypass
+      // Vercel's 4.5 MB request-body cap (the /api/jobs proxy is the local-dev fallback).
+      const base = process.env.NEXT_PUBLIC_MODAL_WEB_URL;
+      const endpoint = base ? `${base}/jobs` : "/api/jobs";
+      const res = await fetch(endpoint, { method: "POST", body: fd });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Submission failed.");
+      if (!res.ok) throw new Error(data.error || data.detail || "Submission failed.");
       router.push(`/jobs/${data.job_id}`);
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
