@@ -86,6 +86,33 @@ pre.tab {
   color: #cfe3ff;
 }
 .osmd { background: #fff; border-radius: 8px; padding: 8px; overflow-x: auto; }
+/* alphaTab draws dark notation glyphs, so it needs a light surface like the score. */
+.alphatab { background: #fff; border-radius: 8px; padding: 12px; overflow-x: auto; }
+
+/* Piano roll */
+.pianoroll { margin-top: 4px; }
+.pr-controls { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+.pr-controls button {
+  width: 30px; height: 30px; border-radius: 6px; cursor: pointer; font-size: 18px; line-height: 1;
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+}
+.pr-controls button:hover { border-color: var(--accent); }
+.pr-tip {
+  font: 12px ui-monospace, Menlo, Consolas, monospace; color: var(--text);
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px; padding: 3px 8px;
+}
+.pr-body { display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.pr-axis { flex: 0 0 46px; background: var(--panel-2); border-right: 1px solid var(--border); }
+.pr-axis-row { display: flex; align-items: center; justify-content: flex-end; padding-right: 6px; box-sizing: border-box; }
+.pr-axis-row.black { background: rgba(255, 255, 255, .025); }
+.pr-axis-row span { font: 10px ui-monospace, Menlo, Consolas, monospace; color: var(--muted); }
+.pr-scroll { flex: 1; overflow-x: auto; background: #0b0d11; }
+.pr-bg { fill: #0b0d11; }
+.pr-bg.black { fill: #0e131b; }
+.pr-grid { stroke: rgba(255, 255, 255, .07); stroke-width: 1; }
+.pr-note { fill: var(--accent); }
+.pr-note:hover { fill: #c7dcff; }
+.pr-playhead { stroke: var(--warn); stroke-width: 2; pointer-events: none; }
 
 table.cost { width: 100%; border-collapse: collapse; margin: 10px 0 22px; font-size: 14px; }
 table.cost th, table.cost td { border: 1px solid var(--border); padding: 8px 10px; text-align: left; }

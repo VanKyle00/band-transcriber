@@ -11,7 +11,7 @@
   "dependencies": {
     "@coderline/alphatab": "1.8.3",
     "@supabase/supabase-js": "^2.45.0",
-    "html-midi-player": "^1.5.0",
+    "@tonejs/midi": "^2.0.28",
     "next": "^15.3.0",
     "opensheetmusicdisplay": "^1.9.0",
     "react": "^19.0.0",

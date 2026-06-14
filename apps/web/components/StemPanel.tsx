@@ -59,9 +59,12 @@ export default function StemPanel({ stem }: { stem: StemArtifacts }) {
       {view === "tab" && (stem.tab || stem.tab_alphatex) && (
         <Tab url={stem.tab} alphatexUrl={stem.tab_alphatex} />
       )}
-      {view === "roll" && stem.midi && <PianoRoll url={stem.midi} id={stem.name} />}
+      {view === "roll" && stem.midi && (
+        <PianoRoll url={stem.midi} audioUrl={stem.audio} id={stem.name} />
+      )}
 
-      {stem.audio && (
+      {/* The piano roll carries its own synced player; show the plain one elsewhere. */}
+      {view !== "roll" && stem.audio && (
         <audio controls src={stem.audio} style={{ width: "100%", marginTop: 14 }} />
       )}
 
