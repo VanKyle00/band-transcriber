@@ -30,13 +30,19 @@ def _probe_duration(path: Path) -> float:
 
 def _normalize(src: Path, dst: Path) -> Path:
     """Transcode to capped 44.1 kHz stereo WAV."""
-    subprocess.run(
+    proc = subprocess.run(
         ["ffmpeg", "-y", "-i", str(src),
          "-t", str(MAX_DURATION_SEC),
          "-ac", str(TARGET_CHANNELS), "-ar", str(TARGET_SR),
          "-vn", str(dst)],
-        check=True, capture_output=True,
+        capture_output=True, text=True,
     )
+    if proc.returncode != 0:
+        size = src.stat().st_size if src.exists() else -1
+        raise DownloadError(
+            f"ffmpeg could not decode the input (exit {proc.returncode}; "
+            f"input {size} bytes). {proc.stderr.strip()[-600:]}"
+        )
     return dst
 
 
@@ -66,6 +72,8 @@ def from_file(path: str | Path, workdir: Path) -> Path:
     src = Path(path)
     if not src.exists():
         raise DownloadError(f"Input file not found: {src}")
+    workdir = Path(workdir)
+    workdir.mkdir(parents=True, exist_ok=True)
     return _normalize(src, workdir / "input.wav")
 
 
