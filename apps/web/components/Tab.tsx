@@ -50,6 +50,8 @@ function AlphaTexTab({ url }: { url: string }) {
             fontDirectory:
               "https://cdn.jsdelivr.net/npm/@coderline/alphatab@1.8.3/dist/font/",
           },
+          // Page layout wraps bars into stacked lines (no endless horizontal scroll).
+          display: { layoutMode: "page" },
           player: { enablePlayer: false },
         } as any);
         api.tex(tex);

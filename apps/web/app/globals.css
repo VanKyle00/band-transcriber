@@ -80,16 +80,18 @@ button.primary:disabled { opacity: .5; cursor: not-allowed; }
 .stem-head { display: flex; align-items: center; justify-content: space-between; }
 .downloads a { margin-right: 14px; font-size: 13px; }
 
+/* Score/tab viewers are capped to a scrollable window so a long song doesn't make the
+   page scroll forever — each stem's notation stays a manageable, paged-feeling box. */
 pre.tab {
-  overflow-x: auto; background: #0b0d11; border: 1px solid var(--border);
+  overflow: auto; max-height: 72vh; background: #0b0d11; border: 1px solid var(--border);
   border-radius: 8px; padding: 14px; font: 13px/1.35 ui-monospace, Menlo, Consolas, monospace;
   color: #cfe3ff;
 }
-.osmd { background: #fff; border-radius: 8px; padding: 8px; overflow-x: auto; }
+.osmd { background: #fff; border-radius: 8px; padding: 8px; overflow: auto; max-height: 72vh; }
 /* alphaTab draws dark notation glyphs, so it needs a light surface like the score. */
-.alphatab { background: #fff; border-radius: 8px; padding: 12px; overflow-x: auto; }
+.alphatab { background: #fff; border-radius: 8px; padding: 12px; overflow: auto; max-height: 72vh; }
 /* Drum notation engraved by LilyPond, shown inline as an image. */
-.drum-sheet { background: #fff; border-radius: 8px; padding: 10px; overflow-x: auto; }
+.drum-sheet { background: #fff; border-radius: 8px; padding: 10px; overflow: auto; max-height: 72vh; }
 .drum-sheet img { max-width: 100%; height: auto; display: block; }
 
 /* Piano roll */
