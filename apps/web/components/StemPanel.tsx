@@ -65,9 +65,10 @@ export default function StemPanel({ stem }: { stem: StemArtifacts }) {
         <PianoRoll url={stem.midi} audioUrl={stem.audio} id={stem.name} />
       )}
 
-      {/* Piano roll and the interactive sheet carry their own synced player; show the
-          plain one for the other views (tab, and the drum SVG sheet). */}
-      {!(view === "roll" || (view === "sheet" && stem.musicxml)) && stem.audio && (
+      {/* Piano roll, the interactive sheet, and the alphaTab tab each carry their own
+          player; show the plain stem audio only for views without one (e.g. ASCII tab). */}
+      {!(view === "roll" || (view === "sheet" && stem.musicxml) || (view === "tab" && stem.tab_alphatex)) &&
+        stem.audio && (
         <audio controls src={stem.audio} style={{ width: "100%", marginTop: 14 }} />
       )}
 
