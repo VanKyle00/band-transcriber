@@ -173,7 +173,7 @@ def process_job(job_id: str, source: str, is_url: bool, stems: list[str],
         # MT3 is disabled in this deployment (see mt3_to_midi above): its JAX/T5X image
         # fails to build on Modal. Every stem — incl. guitar/piano — renders via the CPU
         # transcribe_stem path, which uses basic-pitch for the polyphonic stems.
-        render_calls = [transcribe_stem.spawn(n, stem_bytes[n], job_id, None, grid_tuple)
+        render_calls = [transcribe_stem.spawn(n, stem_bytes[n], job_id, grid=grid_tuple)
                         for n in available]
 
         results = [c.get() for c in render_calls]
