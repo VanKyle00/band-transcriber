@@ -7,12 +7,15 @@ one bad render (e.g. percussion engraving) never sinks the whole job.
 """
 from __future__ import annotations
 
+import logging
 import tempfile
 from pathlib import Path
 
 from . import download, drumnotation, notation, opentab, postprocess, separate, storage, tab
 from .config import DEFAULT_STEMS, OPENFRET_STEMS, STEMS
 from .transcribe import transcribe
+
+logger = logging.getLogger(__name__)
 
 
 def _build_tab(stem_name: str, midi: Path, spec) -> tuple[str | None, str | None, str | None]:
@@ -123,7 +126,8 @@ def run_pipeline(job_id: str, source: str, is_url: bool,
 
         try:
             grid = postprocess.detect_tempo(wav)
-        except Exception:
+        except Exception as exc:
+            logger.warning("tempo detection failed; falling back to 120 BPM: %s", exc)
             grid = None
 
         storage.update_job(job_id, stage="separating")
