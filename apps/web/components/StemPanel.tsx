@@ -59,7 +59,7 @@ export default function StemPanel({ stem }: { stem: StemArtifacts }) {
         <SheetMusic url={stem.musicxml} audioUrl={stem.audio} />
       )}
       {view === "tab" && (stem.tab || stem.tab_alphatex) && (
-        <Tab url={stem.tab} alphatexUrl={stem.tab_alphatex} />
+        <Tab url={stem.tab} alphatexUrl={stem.tab_alphatex} audioUrl={stem.audio} />
       )}
       {view === "roll" && stem.midi && (
         <PianoRoll url={stem.midi} audioUrl={stem.audio} id={stem.name} />
