@@ -31,3 +31,29 @@ def _fold_tempo(bpm: float) -> float:
     while bpm > 180:
         bpm /= 2
     return bpm
+
+
+def _slot_seconds(grid: Grid, subdiv: int) -> float:
+    return (60.0 / grid.bpm) / subdiv
+
+
+def _snap(t: float, grid: Grid, slot: float) -> float:
+    return grid.beat_offset + round((t - grid.beat_offset) / slot) * slot
+
+
+def quantize_and_clean(notes, grid: Grid, *, monophonic: bool, subdiv: int = 4) -> list[Note]:
+    """Snap notes to a 16th grid and drop spurious ones.
+
+    (Same-pitch merge + monophony resolution are layered in by Task 3.)
+    """
+    slot = _slot_seconds(grid, subdiv)
+    kept = [Note(*n) for n in notes if (n[1] - n[0]) >= slot / 2]
+    snapped: list[Note] = []
+    for n in kept:
+        s = _snap(n.start, grid, slot)
+        e = _snap(n.end, grid, slot)
+        if e < s + slot:
+            e = s + slot
+        snapped.append(n._replace(start=s, end=e))
+    snapped.sort(key=lambda n: (n.start, n.pitch))
+    return snapped
