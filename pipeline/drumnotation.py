@@ -6,8 +6,8 @@ Two renderings from the same kick/snare/hi-hat 16th grid:
     8ths/quarters). The browser renders this with OSMD, so the playback cursor works on it.
   - ``render_drum_pdf`` → a LilyPond ``\\drummode`` engraving for a clean printable download.
 
-The 16th grid is quantized at a fixed assumed tempo — best-effort, like the rest of the
-drum path; richer tempo estimation is a documented follow-up.
+The 16th grid is quantized at the caller-supplied tempo (default 120 BPM); the pipeline
+passes the song's detected tempo here so the rhythm reads at the right speed.
 """
 from __future__ import annotations
 
