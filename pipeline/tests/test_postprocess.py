@@ -102,6 +102,27 @@ def test_quantize_respects_nonzero_beat_offset():
     assert out == [Note(0.5, 0.875, 60, 100)]
 
 
+def test_apply_to_midi_quantizes_and_sets_tempo(tmp_path):
+    pretty_midi = pytest.importorskip("pretty_midi")
+    from pipeline.postprocess import apply_to_midi
+
+    pm = pretty_midi.PrettyMIDI()
+    inst = pretty_midi.Instrument(program=0)
+    inst.notes.append(pretty_midi.Note(velocity=100, pitch=60, start=0.13, end=0.60))
+    pm.instruments.append(inst)
+    midi = tmp_path / "t.mid"
+    pm.write(str(midi))
+
+    apply_to_midi(midi, Grid(bpm=120.0, beat_offset=0.0), monophonic=False)
+
+    out = pretty_midi.PrettyMIDI(str(midi))
+    note = out.instruments[0].notes[0]
+    assert abs(note.start - 0.125) < 1e-3
+    assert abs(note.end - 0.625) < 1e-3
+    _, tempi = out.get_tempo_changes()
+    assert abs(float(tempi[0]) - 120.0) < 1e-2
+
+
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
         if name.startswith("test_") and callable(fn):
