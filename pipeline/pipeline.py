@@ -7,12 +7,15 @@ one bad render (e.g. percussion engraving) never sinks the whole job.
 """
 from __future__ import annotations
 
+import logging
 import tempfile
 from pathlib import Path
 
-from . import download, drumnotation, notation, opentab, separate, storage, tab
+from . import download, drumnotation, notation, opentab, postprocess, separate, storage, tab
 from .config import DEFAULT_STEMS, OPENFRET_STEMS, STEMS
 from .transcribe import transcribe
+
+logger = logging.getLogger(__name__)
 
 
 def _build_tab(stem_name: str, midi: Path, spec) -> tuple[str | None, str | None, str | None]:
@@ -40,7 +43,7 @@ def _build_tab(stem_name: str, midi: Path, spec) -> tuple[str | None, str | None
 
 
 def process_stem(stem_name: str, stem_wav: Path, workdir: Path, job_id: str,
-                 precomputed_midi: Path | None = None) -> dict:
+                 precomputed_midi: Path | None = None, grid=None) -> dict:
     """Transcribe + render one stem, upload its artifacts, return a URL manifest.
 
     `precomputed_midi`: MIDI already produced upstream (e.g. by the MT3 GPU function);
@@ -66,15 +69,21 @@ def process_stem(stem_name: str, stem_wav: Path, workdir: Path, job_id: str,
         except Exception as exc:  # transcription is the prerequisite for everything below
             out["warnings"].append(f"transcription failed: {exc}")
             return out
+    if grid is not None and spec.transcriber == "melodic":
+        try:
+            postprocess.apply_to_midi(midi, grid, monophonic=not spec.polyphonic)
+        except Exception as exc:
+            out["warnings"].append(f"post-processing failed: {exc}")
     out["midi"] = storage.upload_artifact(midi, job_id)
 
     if spec.clef == "percussion":
         # Drums get real percussion notation: a MusicXML the browser renders interactively
         # with OSMD (so the playback cursor works), plus a LilyPond-engraved PDF to download.
         try:
-            xml = drumnotation.render_drum_musicxml(midi, sdir / f"{stem_name}.musicxml")
+            bpm = grid.bpm if grid is not None else 120.0
+            xml = drumnotation.render_drum_musicxml(midi, sdir / f"{stem_name}.musicxml", bpm=bpm)
             out["musicxml"] = storage.upload_artifact(xml, job_id)
-            pdf = drumnotation.render_drum_pdf(midi, sdir / f"{stem_name}.pdf")
+            pdf = drumnotation.render_drum_pdf(midi, sdir / f"{stem_name}.pdf", bpm=bpm)
             out["sheet_pdf"] = storage.upload_artifact(pdf, job_id)
         except Exception as exc:
             out["warnings"].append(f"drum notation failed: {exc}")
@@ -115,6 +124,12 @@ def run_pipeline(job_id: str, source: str, is_url: bool,
         storage.update_job(job_id, status="processing", stage="downloading")
         wav = download.fetch_audio(source, is_url, work / "src", proxy)
 
+        try:
+            grid = postprocess.detect_tempo(wav)
+        except Exception as exc:
+            logger.warning("tempo detection failed; falling back to 120 BPM: %s", exc)
+            grid = None
+
         storage.update_job(job_id, stage="separating")
         separated = separate.separate(wav, work / "stems")
 
@@ -123,7 +138,7 @@ def run_pipeline(job_id: str, source: str, is_url: bool,
             if name not in separated:
                 continue
             storage.update_job(job_id, stage=f"transcribing:{name}")
-            results.append(process_stem(name, separated[name], work / "out", job_id))
+            results.append(process_stem(name, separated[name], work / "out", job_id, grid=grid))
 
         artifacts = {"stems": results}
         storage.update_job(job_id, status="done", stage="done", artifacts=artifacts)

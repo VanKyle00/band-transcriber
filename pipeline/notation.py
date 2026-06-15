@@ -35,11 +35,26 @@ def _apply_clef(score, clef_name: str) -> None:
         break
 
 
+def _apply_key(score) -> None:
+    """Insert a detected key signature on every part (readability only; pitches unchanged)."""
+    from music21 import key as m21key
+
+    try:
+        analyzed = score.analyze("key")
+    except Exception:
+        return
+    if analyzed is None:
+        return
+    for part in score.parts:
+        part.insert(0, m21key.KeySignature(analyzed.sharps))
+
+
 def midi_to_musicxml(midi_path: Path, out_xml: Path, clef_name: str = "treble") -> Path:
     from music21 import converter
 
     score = converter.parse(str(midi_path))
     _apply_clef(score, clef_name)
+    _apply_key(score)
     out_xml.parent.mkdir(parents=True, exist_ok=True)
     score.write("musicxml", fp=str(out_xml))
     return out_xml

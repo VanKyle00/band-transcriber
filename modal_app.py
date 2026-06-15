@@ -9,10 +9,13 @@ Topology (cost-aware):
 Deploy:  modal deploy modal_app.py
 Test:    modal run modal_app.py::process_job --job-id test --source song.wav --is-url false
 """
+import logging
 import os
 import uuid
 
 import modal
+
+logger = logging.getLogger(__name__)
 
 app = modal.App("band-transcriber")
 
@@ -108,16 +111,19 @@ def mt3_to_midi(stem_name: str, wav_bytes: bytes) -> bytes:
 
 @app.function(image=image, timeout=1800, secrets=secrets)
 def transcribe_stem(stem_name: str, wav_bytes: bytes, job_id: str,
-                    midi_bytes: bytes | None = None) -> dict:
+                    midi_bytes: bytes | None = None,
+                    grid: tuple | None = None) -> dict:
     """CPU: render one stem (notation + tab + upload).
 
     If `midi_bytes` is supplied (e.g. from MT3), it's used as the transcription;
     otherwise the stem is transcribed here (drum classifier / basic-pitch).
+    `grid` is a serialized (bpm, beat_offset) tuple from detect_tempo, or None.
     """
     import tempfile
     from pathlib import Path
 
     from pipeline.pipeline import process_stem
+    from pipeline.postprocess import Grid
 
     work = Path(tempfile.mkdtemp())
     wav = work / f"{stem_name}.wav"
@@ -126,7 +132,9 @@ def transcribe_stem(stem_name: str, wav_bytes: bytes, job_id: str,
     if midi_bytes is not None:
         precomputed = work / f"{stem_name}.in.mid"
         precomputed.write_bytes(midi_bytes)
-    return process_stem(stem_name, wav, work / "out", job_id, precomputed_midi=precomputed)
+    grid_obj = Grid(*grid) if grid is not None else None
+    return process_stem(stem_name, wav, work / "out", job_id,
+                        precomputed_midi=precomputed, grid=grid_obj)
 
 
 @app.function(image=image, timeout=3600, secrets=secrets)
@@ -136,7 +144,7 @@ def process_job(job_id: str, source: str, is_url: bool, stems: list[str],
     import tempfile
     from pathlib import Path
 
-    from pipeline import download, storage
+    from pipeline import download, postprocess, storage
 
     work = Path(tempfile.mkdtemp())
     try:
@@ -149,6 +157,13 @@ def process_job(job_id: str, source: str, is_url: bool, stems: list[str],
             wav = download.fetch_audio(source, is_url, work / "src",
                                        proxy or os.environ.get("YTDLP_PROXY"))
 
+        try:
+            grid = postprocess.detect_tempo(wav)
+            grid_tuple = (grid.bpm, grid.beat_offset)
+        except Exception as exc:
+            logger.warning("tempo detection failed; falling back to 120 BPM: %s", exc)
+            grid_tuple = None
+
         storage.update_job(job_id, stage="separating")
         stem_bytes = separate_audio.remote(wav.read_bytes())
 
@@ -158,7 +173,8 @@ def process_job(job_id: str, source: str, is_url: bool, stems: list[str],
         # MT3 is disabled in this deployment (see mt3_to_midi above): its JAX/T5X image
         # fails to build on Modal. Every stem — incl. guitar/piano — renders via the CPU
         # transcribe_stem path, which uses basic-pitch for the polyphonic stems.
-        render_calls = [transcribe_stem.spawn(n, stem_bytes[n], job_id) for n in available]
+        render_calls = [transcribe_stem.spawn(n, stem_bytes[n], job_id, grid=grid_tuple)
+                        for n in available]
 
         results = [c.get() for c in render_calls]
         artifacts = {"stems": results}
