@@ -24,12 +24,12 @@ _GRID = 16           # 16th-note grid
 _ASSUMED_BPM = 120   # onsets are quantized at this tempo
 
 
-def _slots(midi_path: Path) -> list[set[int]]:
+def _slots(midi_path: Path, bpm: float = _ASSUMED_BPM) -> list[set[int]]:
     """Quantize the drum MIDI onto a 16th-note grid; each slot holds the GM pitches hit there."""
     import pretty_midi
 
     pm = pretty_midi.PrettyMIDI(str(midi_path))
-    sec_per_slot = (60.0 / _ASSUMED_BPM) * (4.0 / _GRID)
+    sec_per_slot = (60.0 / bpm) * (4.0 / _GRID)
     end = max(pm.get_end_time(), sec_per_slot)
     n = int(math.ceil(end / sec_per_slot))
     slots: list[set[int]] = [set() for _ in range(n)]
@@ -96,9 +96,9 @@ def _measure_xml(num: int, slots: list[set[int]], first: bool) -> str:
     return f'<measure number="{num}">{attrs}{body}</measure>'
 
 
-def render_drum_musicxml(midi_path: Path, out_xml: Path) -> Path:
+def render_drum_musicxml(midi_path: Path, out_xml: Path, bpm: float = _ASSUMED_BPM) -> Path:
     """Emit a percussion-staff MusicXML (kick/snare/hi-hat at standard positions, x hi-hats)."""
-    slots = _slots(midi_path)
+    slots = _slots(midi_path, bpm)
     measures = "".join(
         _measure_xml(m + 1, slots[m * _GRID:(m + 1) * _GRID], first=(m == 0))
         for m in range(len(slots) // _GRID)
@@ -128,12 +128,12 @@ def _lilypond(slots: list[set[int]]) -> str:
             f'    {body}\n  }}\n  \\layout {{ }}\n}}\n')
 
 
-def render_drum_pdf(midi_path: Path, out_pdf: Path) -> Path:
+def render_drum_pdf(midi_path: Path, out_pdf: Path, bpm: float = _ASSUMED_BPM) -> Path:
     """Engrave a clean printable drum chart via LilyPond's drum mode."""
     out_pdf.parent.mkdir(parents=True, exist_ok=True)
     work = out_pdf.parent
     ly = work / "drums.ly"
-    ly.write_text(_lilypond(_slots(midi_path)), encoding="utf-8")
+    ly.write_text(_lilypond(_slots(midi_path, bpm)), encoding="utf-8")
     base = work / "drums_render"
     subprocess.run(["lilypond", "--pdf", "-dno-point-and-click", "-o", str(base), str(ly)],
                    check=True, capture_output=True)

@@ -139,6 +139,25 @@ def test_detect_tempo_unpacks_array_tempo(monkeypatch):
     assert abs(grid.beat_offset - 0.05) < 1e-9
 
 
+def test_drum_slots_scale_with_tempo(tmp_path):
+    pretty_midi = pytest.importorskip("pretty_midi")
+    from pipeline.drumnotation import _slots
+
+    pm = pretty_midi.PrettyMIDI()
+    drum = pretty_midi.Instrument(program=0, is_drum=True)
+    drum.notes.append(pretty_midi.Note(velocity=100, pitch=36, start=0.0, end=0.05))
+    drum.notes.append(pretty_midi.Note(velocity=100, pitch=36, start=1.0, end=1.05))
+    pm.instruments.append(drum)
+    midi = tmp_path / "d.mid"
+    pm.write(str(midi))
+
+    slow = _slots(midi, bpm=60.0)    # 16th = 0.25s -> hit at 1.0s lands in slot 4
+    fast = _slots(midi, bpm=120.0)   # 16th = 0.125s -> hit at 1.0s lands in slot 8
+    slow_hits = [i for i, s in enumerate(slow) if 36 in s]
+    fast_hits = [i for i, s in enumerate(fast) if 36 in s]
+    assert fast_hits[1] > slow_hits[1]
+
+
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
         if name.startswith("test_") and callable(fn):
