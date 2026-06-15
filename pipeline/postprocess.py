@@ -41,11 +41,42 @@ def _snap(t: float, grid: Grid, slot: float) -> float:
     return grid.beat_offset + round((t - grid.beat_offset) / slot) * slot
 
 
-def quantize_and_clean(notes, grid: Grid, *, monophonic: bool, subdiv: int = 4) -> list[Note]:
-    """Snap notes to a 16th grid and drop spurious ones.
+def _merge_same_pitch(notes: list[Note], slot: float) -> list[Note]:
+    """Merge consecutive same-pitch notes separated by less than one slot."""
+    result: list[Note] = []
+    last_idx: dict[int, int] = {}
+    for n in notes:
+        i = last_idx.get(n.pitch)
+        if i is not None and n.start - result[i].end < slot:
+            p = result[i]
+            result[i] = p._replace(end=max(p.end, n.end),
+                                   velocity=max(p.velocity, n.velocity))
+        else:
+            last_idx[n.pitch] = len(result)
+            result.append(n)
+    return result
 
-    (Same-pitch merge + monophony resolution are layered in by Task 3.)
-    """
+
+def _enforce_monophony(notes: list[Note], slot: float) -> list[Note]:
+    """Resolve overlaps so at most one note sounds at a time (monophonic stems)."""
+    notes = sorted(notes, key=lambda n: (n.start, n.pitch))
+    result: list[Note] = []
+    for n in notes:
+        if result and n.start < result[-1].end:
+            prev = result[-1]
+            if n.start - prev.start >= slot / 2:
+                result[-1] = prev._replace(end=n.start)   # truncate prev, keep both
+                result.append(n)
+            elif (n.end - n.start) > (prev.end - prev.start):
+                result[-1] = n                             # prev too short -> n wins
+            # else: drop n (prev wins)
+        else:
+            result.append(n)
+    return result
+
+
+def quantize_and_clean(notes, grid: Grid, *, monophonic: bool, subdiv: int = 4) -> list[Note]:
+    """Snap notes to a 16th grid, drop spurious ones, merge repeats, enforce monophony."""
     slot = _slot_seconds(grid, subdiv)
     kept = [Note(*n) for n in notes if (n[1] - n[0]) >= slot / 2]
     snapped: list[Note] = []
@@ -56,4 +87,7 @@ def quantize_and_clean(notes, grid: Grid, *, monophonic: bool, subdiv: int = 4) 
             e = s + slot
         snapped.append(n._replace(start=s, end=e))
     snapped.sort(key=lambda n: (n.start, n.pitch))
-    return snapped
+    merged = _merge_same_pitch(snapped, slot)
+    if monophonic:
+        merged = _enforce_monophony(merged, slot)
+    return merged

@@ -55,6 +55,53 @@ def test_quantize_enforces_minimum_one_slot():
     assert out == [Note(0.5, 0.625, 60, 100)]
 
 
+def test_merge_consecutive_same_pitch_keeps_max_velocity():
+    grid = Grid(bpm=120.0, beat_offset=0.0)
+    notes = [Note(0.0, 0.125, 60, 90), Note(0.125, 0.25, 60, 110)]
+    out = quantize_and_clean(notes, grid, monophonic=False)
+    assert out == [Note(0.0, 0.25, 60, 110)]
+
+
+def test_does_not_merge_distant_same_pitch():
+    grid = Grid(bpm=120.0, beat_offset=0.0)
+    notes = [Note(0.0, 0.125, 60, 100), Note(0.5, 0.625, 60, 100)]
+    out = quantize_and_clean(notes, grid, monophonic=False)
+    assert len(out) == 2
+
+
+def test_polyphonic_keeps_overlapping_pitches():
+    grid = Grid(bpm=120.0, beat_offset=0.0)
+    chord = [Note(0.0, 0.5, 60, 100), Note(0.0, 0.5, 64, 100)]
+    out = quantize_and_clean(chord, grid, monophonic=False)
+    assert len(out) == 2
+
+
+def test_monophony_drops_overlap_keeps_longer():
+    grid = Grid(bpm=120.0, beat_offset=0.0)
+    notes = [Note(0.0, 0.125, 60, 100), Note(0.0, 0.5, 67, 100)]
+    out = quantize_and_clean(notes, grid, monophonic=True)
+    assert [n.pitch for n in out] == [67]
+
+
+def test_monophony_truncates_lingering_note():
+    grid = Grid(bpm=120.0, beat_offset=0.0)
+    # 60 lingers (snaps 0.0..0.375) into 62 (snaps 0.25..0.5) -> 60 truncated to 0.25
+    notes = [Note(0.0, 0.36, 60, 100), Note(0.25, 0.5, 62, 100)]
+    out = quantize_and_clean(notes, grid, monophonic=True)
+    assert out == [Note(0.0, 0.25, 60, 100), Note(0.25, 0.5, 62, 100)]
+
+
+def test_quantize_empty_input_returns_empty():
+    grid = Grid(bpm=120.0, beat_offset=0.0)
+    assert quantize_and_clean([], grid, monophonic=False) == []
+
+
+def test_quantize_respects_nonzero_beat_offset():
+    grid = Grid(bpm=120.0, beat_offset=0.5)   # grid lines at 0.5 + k*0.125
+    out = quantize_and_clean([Note(0.52, 0.88, 60, 100)], grid, monophonic=False)
+    assert out == [Note(0.5, 0.875, 60, 100)]
+
+
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
         if name.startswith("test_") and callable(fn):
