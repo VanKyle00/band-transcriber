@@ -43,6 +43,8 @@ def _apply_key(score) -> None:
         analyzed = score.analyze("key")
     except Exception:
         return
+    if analyzed is None:
+        return
     for part in score.parts:
         part.insert(0, m21key.KeySignature(analyzed.sharps))
 
