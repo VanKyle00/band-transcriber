@@ -21,6 +21,14 @@ def test_fold_tempo_halves_fast():
     assert _fold_tempo(200.0) == 100.0
 
 
+def test_fold_tempo_keeps_lower_bound():
+    assert _fold_tempo(60.0) == 60.0
+
+
+def test_fold_tempo_keeps_upper_bound():
+    assert _fold_tempo(180.0) == 180.0
+
+
 def test_fold_tempo_rejects_nonpositive():
     with pytest.raises(ValueError):
         _fold_tempo(0.0)

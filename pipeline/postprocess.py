@@ -23,7 +23,7 @@ class Grid(NamedTuple):
 
 
 def _fold_tempo(bpm: float) -> float:
-    """Fold a detected tempo into a musical 60-180 BPM range (half/double-time guard)."""
+    """Fold a detected tempo into a musical [60, 180] BPM range, inclusive (half/double-time guard)."""
     if not math.isfinite(bpm) or bpm <= 0:
         raise ValueError(f"bad tempo: {bpm}")
     while bpm < 60:
