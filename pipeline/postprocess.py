@@ -96,10 +96,11 @@ def quantize_and_clean(notes, grid: Grid, *, monophonic: bool, subdiv: int = 4) 
 def detect_tempo(wav) -> Grid:
     """Estimate a global tempo + first-beat offset from the mix (librosa beat tracking)."""
     import librosa
+    import numpy as np
 
     y, sr = librosa.load(str(wav), mono=True)
     tempo, beats = librosa.beat.beat_track(y=y, sr=sr, units="time")
-    bpm = _fold_tempo(float(tempo))
+    bpm = _fold_tempo(float(np.atleast_1d(tempo)[0]))  # beat_track returns a shape-(1,) array
     beat_offset = float(beats[0]) if len(beats) else 0.0
     return Grid(bpm=bpm, beat_offset=beat_offset)
 

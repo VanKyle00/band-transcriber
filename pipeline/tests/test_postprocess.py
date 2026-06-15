@@ -123,6 +123,22 @@ def test_apply_to_midi_quantizes_and_sets_tempo(tmp_path):
     assert abs(float(tempi[0]) - 120.0) < 1e-2
 
 
+def test_detect_tempo_unpacks_array_tempo(monkeypatch):
+    librosa = pytest.importorskip("librosa")
+    import numpy as np
+
+    from pipeline.postprocess import detect_tempo
+
+    # beat_track returns tempo as a shape-(1,) array and beats as times in seconds.
+    monkeypatch.setattr(librosa, "load", lambda *a, **k: (np.zeros(1000), 22050))
+    monkeypatch.setattr(librosa.beat, "beat_track",
+                        lambda **k: (np.array([120.0]), np.array([0.05, 0.55])))
+
+    grid = detect_tempo("ignored.wav")
+    assert grid.bpm == 120.0
+    assert abs(grid.beat_offset - 0.05) < 1e-9
+
+
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
         if name.startswith("test_") and callable(fn):
