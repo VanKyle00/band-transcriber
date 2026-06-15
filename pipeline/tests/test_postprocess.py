@@ -158,6 +158,26 @@ def test_drum_slots_scale_with_tempo(tmp_path):
     assert fast_hits[1] > slow_hits[1]
 
 
+def test_apply_key_inserts_key_signature():
+    pytest.importorskip("music21")
+    from music21 import key as m21key
+    from music21 import note as m21note
+    from music21 import stream
+
+    from pipeline.notation import _apply_key
+
+    score = stream.Score()
+    part = stream.Part()
+    for p in ("C4", "E4", "G4", "C5"):
+        part.append(m21note.Note(p, quarterLength=1))
+    score.append(part)
+
+    _apply_key(score)
+
+    found = score.parts[0].getElementsByClass(m21key.KeySignature)
+    assert len(found) >= 1
+
+
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
         if name.startswith("test_") and callable(fn):
