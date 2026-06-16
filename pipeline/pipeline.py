@@ -11,7 +11,8 @@ import logging
 import tempfile
 from pathlib import Path
 
-from . import download, drumnotation, notation, opentab, postprocess, separate, storage, tab
+from . import (download, drumnotation, melodicnotation, notation, opentab, postprocess,
+               separate, storage, tab)
 from .config import DEFAULT_STEMS, OPENFRET_STEMS, STEMS
 from .transcribe import transcribe
 
@@ -92,7 +93,14 @@ def process_stem(stem_name: str, stem_wav: Path, workdir: Path, job_id: str,
             out["warnings"].append(f"drum notation failed: {exc}")
     elif "musicxml" in spec.outputs or "sheet" in spec.outputs:
         try:
-            xml = notation.midi_to_musicxml(midi, sdir / f"{stem_name}.musicxml", spec.clef)
+            # Monophonic stems (bass, vocals) get the downbeat-phased hand-built staff;
+            # polyphonic stems (guitar, piano) stay on music21.
+            if spec.transcriber == "melodic" and not spec.polyphonic and grid is not None:
+                xml = melodicnotation.render_melodic_musicxml(
+                    midi, sdir / f"{stem_name}.musicxml", spec.clef,
+                    bpm=grid.bpm, downbeat=grid.beat_offset, name=stem_name.title())
+            else:
+                xml = notation.midi_to_musicxml(midi, sdir / f"{stem_name}.musicxml", spec.clef)
             if "musicxml" in spec.outputs:
                 out["musicxml"] = storage.upload_artifact(xml, job_id)
             if "sheet" in spec.outputs:
