@@ -16,9 +16,10 @@ import subprocess
 from pathlib import Path
 
 # GM percussion -> LilyPond drum name.
-_DRUM_LY = {36: "bd", 38: "sn", 42: "hh"}
+_DRUM_LY = {36: "bd", 38: "sn", 42: "hh", 47: "tomml", 49: "cymc"}
 # GM percussion -> (MusicXML display-step, display-octave, notehead) on a percussion staff.
-_DRUM_POS = {36: ("F", 4, None), 38: ("C", 5, None), 42: ("G", 5, "x")}
+_DRUM_POS = {36: ("F", 4, None), 38: ("C", 5, None), 42: ("G", 5, "x"),
+             47: ("D", 5, None), 49: ("A", 5, "x")}
 
 _GRID = 16           # 16th-note grid
 _ASSUMED_BPM = 120   # onsets are quantized at this tempo
@@ -97,7 +98,7 @@ def _event_xml(pitches: set[int], dur: int) -> str:
     return out
 
 
-_INSTS = (36, 38, 42)   # kick, snare, hi-hat
+_INSTS = (36, 38, 42, 47, 49)   # kick, snare, hi-hat, toms, cymbals
 
 
 def _consolidate(slots: list[set[int]], pickup: int, *, tol: int = 4) -> list[set[int]]:

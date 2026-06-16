@@ -16,7 +16,7 @@ const noteName = (midi: number) => `${NAMES[midi % 12]}${Math.floor(midi / 12) -
 const isBlackKey = (midi: number) => [1, 3, 6, 8, 10].includes(midi % 12);
 
 // Drums aren't pitched: each GM percussion note is a kit piece. Label rows by piece.
-const DRUM_LABELS: Record<number, string> = { 36: "Kick", 38: "Snare", 42: "Hi-hat" };
+const DRUM_LABELS: Record<number, string> = { 36: "Kick", 38: "Snare", 42: "Hi-hat", 47: "Tom", 49: "Cymbal" };
 
 const ROW = 12; // px per semitone
 

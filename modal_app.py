@@ -73,6 +73,26 @@ mt3_image = (
 )
 
 
+# --- ADTOF image (isolated) --------------------------------------------------------
+# ADTOF (trained 5-class drum transcription: kick/snare/hi-hat/toms/cymbals) pulls a heavy
+# TF2 + madmom + tapcorrect stack that conflicts with the PyTorch base image, so it gets its
+# own. numpy is pinned to 1.24.3 (TF 2.13 requires numpy<=1.24.3); the Cython sdists (madmom,
+# tapcorrect) build with no isolation against that numpy. Pretrained weights ship in the repo
+# via git-lfs, so there's no runtime download.
+adtof_image = (
+    modal.Image.debian_slim(python_version="3.10")
+    .apt_install("git", "git-lfs", "ffmpeg", "build-essential", "libsndfile1")
+    .pip_install("numpy==1.24.3", "Cython==0.29.36", "setuptools", "wheel",
+                 "scipy", "tensorflow==2.13.1")
+    .run_commands(
+        "git lfs install",
+        "git clone https://github.com/MZehren/ADTOF /root/ADTOF",
+        "cd /root/ADTOF && git lfs pull || true",
+        "cd /root/ADTOF && pip install --no-build-isolation .",
+    )
+)
+
+
 @app.function(image=image, gpu="L4", timeout=1800, secrets=secrets)
 def separate_audio(input_wav: bytes) -> dict[str, bytes]:
     """GPU: separate one normalized WAV into stem WAVs (returned as bytes)."""
@@ -107,6 +127,49 @@ def mt3_to_midi(stem_name: str, wav_bytes: bytes) -> bytes:
     out = work / f"{stem_name}.mid"
     transcribe_mt3(wav, out, MT3_MODEL_TYPE, MT3_CHECKPOINT_DIR)
     return out.read_bytes()
+
+
+@app.function(image=adtof_image, timeout=1800, memory=8192)
+def adtof_drums_to_midi(wav_bytes: bytes) -> bytes:
+    """Trained 5-class drum transcription (kick/snare/hi-hat/toms/cymbals) via ADTOF.
+
+    Returns a GM-percussion MIDI. ADTOF emits 35=kick 38=snare 42=hi-hat 47=tom 49=cymbal;
+    the kick is normalized to GM 36 (what drumnotation / DRUM_NOTES key on). CPU, ~real-time.
+    """
+    import glob
+    import os
+    import tempfile
+
+    import pretty_midi
+    from adtof.model.model import Model
+
+    work = tempfile.mkdtemp()
+    indir = os.path.join(work, "in")
+    outdir = os.path.join(work, "out")
+    os.makedirs(indir)
+    os.makedirs(outdir)
+    with open(os.path.join(indir, "drums.wav"), "wb") as f:
+        f.write(wav_bytes)
+
+    model, hparams = Model.modelFactory(modelName="Frame_RNN", scenario="adtofAll", fold=0)
+    model.predictFolder(os.path.join(indir, "*.wav"), outdir, **hparams)
+
+    remap = {35: 36}
+    out = pretty_midi.PrettyMIDI()
+    drum = pretty_midi.Instrument(program=0, is_drum=True, name="Drums")
+    for mid in glob.glob(os.path.join(outdir, "**", "*.mid"), recursive=True):
+        pm = pretty_midi.PrettyMIDI(mid)
+        for inst in pm.instruments:
+            for n in inst.notes:
+                drum.notes.append(pretty_midi.Note(
+                    velocity=n.velocity or 100, pitch=remap.get(n.pitch, n.pitch),
+                    start=n.start, end=n.end))
+    drum.notes.sort(key=lambda n: n.start)
+    out.instruments.append(drum)
+    res = os.path.join(work, "drums.mid")
+    out.write(res)
+    with open(res, "rb") as f:
+        return f.read()
 
 
 @app.function(image=image, timeout=1800, secrets=secrets)
@@ -179,13 +242,25 @@ def process_job(job_id: str, source: str, is_url: bool, stems: list[str],
         storage.update_job(job_id, stage="transcribing")
         available = [n for n in stems if n in stem_bytes]
 
-        # MT3 is disabled in this deployment (see mt3_to_midi above): its JAX/T5X image
-        # fails to build on Modal. Every stem — incl. guitar/piano — renders via the CPU
-        # transcribe_stem path, which uses basic-pitch for the polyphonic stems.
-        render_calls = [transcribe_stem.spawn(n, stem_bytes[n], job_id, grid=grid_tuple)
-                        for n in available]
+        # Drums get ADTOF (trained 5-class transcription) in its own image; its MIDI feeds
+        # transcribe_stem as a precomputed transcription. ADTOF runs in parallel with the
+        # other stems' rendering. On any failure, drums fall back to the built-in heuristic
+        # (transcribe_stem with no precomputed MIDI). MT3 stays disabled (see mt3_to_midi):
+        # guitar/piano use basic-pitch via the CPU transcribe_stem path.
+        adt_call = (adtof_drums_to_midi.spawn(stem_bytes["drums"])
+                    if "drums" in available else None)
+        render_calls = {n: transcribe_stem.spawn(n, stem_bytes[n], job_id, grid=grid_tuple)
+                        for n in available if n != "drums"}
+        if "drums" in available:
+            drum_midi = None
+            try:
+                drum_midi = adt_call.get()
+            except Exception as exc:
+                logger.warning("ADTOF drum transcription failed; using heuristic: %s", exc)
+            render_calls["drums"] = transcribe_stem.spawn(
+                "drums", stem_bytes["drums"], job_id, midi_bytes=drum_midi, grid=grid_tuple)
 
-        results = [c.get() for c in render_calls]
+        results = [render_calls[n].get() for n in available]
         artifacts = {"stems": results}
         meta = postprocess.build_meta(grid_tuple[0] if grid_tuple is not None else None)
         if meta:
