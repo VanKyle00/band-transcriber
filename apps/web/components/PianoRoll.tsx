@@ -25,11 +25,13 @@ export default function PianoRoll({
   audioUrl,
   id,
   speed = 1,
+  onAudio,
 }: {
   url: string;
   audioUrl?: string;
   id: string;
   speed?: number;
+  onAudio?: (el: HTMLAudioElement | null) => void;
 }) {
   const [notes, setNotes] = useState<Note[] | null>(null);
   const [duration, setDuration] = useState(1);
@@ -140,7 +142,10 @@ export default function PianoRoll({
 
       {audioUrl && (
         <audio
-          ref={audio}
+          ref={(el) => {
+            audio.current = el;
+            onAudio?.(el);
+          }}
           controls
           src={audioUrl}
           style={{ width: "100%", marginTop: 10 }}
