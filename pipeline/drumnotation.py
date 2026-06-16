@@ -80,6 +80,49 @@ def _event_xml(pitches: set[int], dur: int) -> str:
     return out + (_rest_xml(dur - d1) if dur - d1 else "")
 
 
+_INSTS = (36, 38, 42)   # kick, snare, hi-hat
+
+
+def _consolidate(slots: list[set[int]], pickup: int, *, tol: int = 4) -> list[set[int]]:
+    """Make repeated drum measures render identically.
+
+    Transcription noise makes the same groove come out slightly different bar to bar
+    (a dropped hi-hat here, a ghost hit there). Cluster the full measures by Hamming
+    distance over their kick/snare/hi-hat hit grid (<= `tol` differing hits), then
+    replace every member of a cluster with the cluster's majority-vote pattern. So
+    identical blocks look identical and stray hits get voted out. The pickup measure
+    and genuinely-different bars (fills) are left untouched.
+    """
+    starts = list(range(pickup, len(slots), _GRID))
+    vecs = [[1 if p in slots[s + i] else 0 for i in range(_GRID) for p in _INSTS]
+            for s in starts]
+    ham = lambda a, b: sum(x != y for x, y in zip(a, b))
+    clusters: list[list] = []   # [canonical_vec, [member_index, ...]]
+    for i, v in enumerate(vecs):
+        for c in clusters:
+            if ham(c[0], v) <= tol:
+                c[1].append(i)
+                break
+        else:
+            clusters.append([v, [i]])
+    for _canon, members in clusters:
+        if len(members) < 2:
+            continue
+        maj = [1 if sum(vecs[m][b] for m in members) * 2 >= len(members) else 0
+               for b in range(_GRID * len(_INSTS))]
+        pattern = [set() for _ in range(_GRID)]
+        b = 0
+        for i in range(_GRID):
+            for p in _INSTS:
+                if maj[b]:
+                    pattern[i].add(p)
+                b += 1
+        for m in members:
+            for i in range(_GRID):
+                slots[starts[m] + i] = set(pattern[i])
+    return slots
+
+
 def _phase(slots: list[set[int]], bpm: float, downbeat: float) -> tuple[list[set[int]], int]:
     """Pickup length (in 16th slots) that puts `downbeat` on a barline, padding the slot
     list so whole 4/4 measures follow the pickup. pickup=0 when no/zero downbeat."""
@@ -117,6 +160,7 @@ def render_drum_musicxml(midi_path: Path, out_xml: Path, bpm: float = _ASSUMED_B
     spanning the full-length stem audio so the playback cursor stays in sync.
     """
     slots, pickup = _phase(_slots(midi_path, bpm), bpm, downbeat)
+    slots = _consolidate(slots, pickup)
     bounds = ([(0, pickup, True)] if pickup else [])
     bounds += [(i, i + _GRID, False) for i in range(pickup, len(slots), _GRID)]
     measures = "".join(
@@ -156,6 +200,7 @@ def render_drum_pdf(midi_path: Path, out_pdf: Path, bpm: float = _ASSUMED_BPM,
     work = out_pdf.parent
     ly = work / "drums.ly"
     slots, pickup = _phase(_slots(midi_path, bpm), bpm, downbeat)
+    slots = _consolidate(slots, pickup)
     ly.write_text(_lilypond(slots, pickup), encoding="utf-8")
     base = work / "drums_render"
     subprocess.run(["lilypond", "--pdf", "-dno-point-and-click", "-o", str(base), str(ly)],
