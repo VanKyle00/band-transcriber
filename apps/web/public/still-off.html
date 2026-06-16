@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Still Off — a drum transcription post-mortem · Band Transcriber</title>
+<meta name="description" content="Almost every way we tried to transcribe drums, and why most of them failed — an honest engineering log." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --paper:#ECE6DA; --paper-2:#F5F1E7; --panel:#FBF7EF;
+    --ink:#231D15; --ink-soft:#5b5042; --ink-faint:#8a7e6c;
+    --accent:#E2622B; --accent-deep:#B8431A;
+    --clay:#B23A2E; --olive:#5d6b39; --amber:#C0851B;
+    --line:#D9D0BF; --line-soft:#E3DCCD;
+    --grid:#cdbf9f;
+    --col:720px;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:"Fraunces",Georgia,serif; font-optical-sizing:auto;
+    font-size:19px; line-height:1.65; letter-spacing:.005em;
+    -webkit-font-smoothing:antialiased; overflow-x:hidden;
+  }
+  /* paper grain */
+  body::before{
+    content:""; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:.5;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E");
+    mix-blend-mode:multiply;
+  }
+  ::selection{background:var(--accent); color:var(--paper);}
+
+  /* reading progress */
+  #bar{position:fixed; top:0; left:0; height:3px; width:0; background:var(--accent); z-index:50;
+    box-shadow:0 0 12px rgba(226,98,43,.5);}
+
+  .wrap{position:relative; z-index:1; max-width:var(--col); margin:0 auto; padding:0 26px;}
+
+  /* ---- masthead ---- */
+  header.masthead{padding:88px 0 30px;}
+  .kicker{font-family:"Space Mono",monospace; font-size:12.5px; letter-spacing:.32em;
+    text-transform:uppercase; color:var(--accent-deep); display:flex; gap:14px; align-items:center;}
+  .kicker::after{content:""; height:1px; flex:1; background:var(--line);}
+  h1{font-family:"Bricolage Grotesque",sans-serif; font-weight:800; font-size:clamp(58px,13vw,116px);
+    line-height:.92; letter-spacing:-.03em; margin:.32em 0 .12em; color:var(--ink);}
+  h1 .em{color:var(--accent); font-style:normal;}
+  .dek{font-size:clamp(20px,2.6vw,25px); color:var(--ink-soft); max-width:30ch; line-height:1.4;
+    font-weight:400;}
+  .byline{font-family:"Space Mono",monospace; font-size:12.5px; color:var(--ink-faint);
+    text-transform:uppercase; letter-spacing:.12em; margin-top:34px; display:flex; flex-wrap:wrap; gap:8px 20px;}
+  .byline b{color:var(--ink); font-weight:700;}
+
+  /* ---- drum grid motif ---- */
+  .grid-motif{display:flex; gap:5px; align-items:flex-end; height:46px; margin:42px 0; }
+  .grid-motif .t{flex:1; background:var(--grid); border-radius:2px; height:30%;}
+  .grid-motif .t.beat{height:55%; background:var(--ink-faint);}
+  .grid-motif .t.kick{height:100%; background:var(--accent);}
+  .grid-motif .t.snare{height:78%; background:var(--clay);}
+  .grid-motif .t.hat{height:46%; background:var(--amber);}
+
+  /* ---- body type ---- */
+  section{padding:8px 0;}
+  p{margin:0 0 1.15em; max-width:64ch;}
+  .lead{font-size:23px; line-height:1.55;}
+  .lead::first-letter{font-family:"Bricolage Grotesque",sans-serif; font-weight:800; float:left;
+    font-size:74px; line-height:.72; padding:8px 12px 0 0; color:var(--accent);}
+  a{color:var(--accent-deep); text-decoration-thickness:1px; text-underline-offset:3px;}
+  strong{font-weight:600;}
+  em{font-style:italic;}
+  code, .mono{font-family:"Space Mono",monospace; font-size:.82em; background:#0000000a;
+    padding:.1em .4em; border-radius:4px; letter-spacing:-.01em;}
+
+  h2{font-family:"Bricolage Grotesque",sans-serif; font-weight:700; font-size:clamp(30px,5vw,42px);
+    line-height:1.04; letter-spacing:-.02em; margin:1.5em 0 .5em;}
+  .eyebrow{font-family:"Space Mono",monospace; font-size:12px; letter-spacing:.26em;
+    text-transform:uppercase; color:var(--accent-deep); margin-bottom:6px;}
+
+  /* ---- attempt card ---- */
+  .log{margin:30px 0;}
+  .attempt{border:1.5px solid var(--line); background:var(--panel); border-radius:14px;
+    padding:26px 28px 24px; margin:22px 0; position:relative; box-shadow:0 1px 0 #fff inset;
+    transition:transform .35s cubic-bezier(.2,.7,.2,1), box-shadow .35s, border-color .35s;}
+  .attempt:hover{transform:translateY(-3px); box-shadow:-6px 10px 0 -2px var(--line);
+    border-color:var(--ink-faint);}
+  .attempt .no{font-family:"Space Mono",monospace; font-size:12px; letter-spacing:.2em;
+    color:var(--ink-faint); text-transform:uppercase;}
+  .attempt h3{font-family:"Bricolage Grotesque",sans-serif; font-weight:700; font-size:24px;
+    line-height:1.12; margin:.15em 0 .55em; letter-spacing:-.01em; max-width:24ch;}
+  .attempt p{font-size:17.5px; line-height:1.55; color:var(--ink-soft); margin-bottom:.7em;}
+  .attempt p:last-child{margin-bottom:0;}
+  .attempt .why{color:var(--ink);}
+  .attempt .why b{color:var(--accent-deep); font-weight:600;}
+
+  .badge{position:absolute; top:-13px; right:22px; font-family:"Space Mono",monospace;
+    font-size:11.5px; font-weight:700; letter-spacing:.14em; text-transform:uppercase;
+    padding:5px 12px; border-radius:999px; color:var(--paper); display:inline-flex; gap:7px; align-items:center;}
+  .badge::before{content:""; width:7px; height:7px; border-radius:50%; background:currentColor; opacity:.85;}
+  .b-fail{background:var(--clay);} .b-ship{background:var(--olive);}
+  .b-sup{background:var(--amber);} .b-lied{background:#7a5cab;}
+
+  /* ---- data callout ---- */
+  .data{border:1.5px solid var(--ink); border-radius:12px; overflow:hidden; margin:26px 0;
+    font-family:"Space Mono",monospace; background:var(--paper-2);}
+  .data .h{background:var(--ink); color:var(--paper); padding:10px 16px; font-size:12px;
+    letter-spacing:.16em; text-transform:uppercase; display:flex; justify-content:space-between;}
+  .row{display:grid; grid-template-columns:1fr auto auto; gap:10px; padding:11px 16px;
+    border-top:1px solid var(--line); font-size:14px; align-items:baseline;}
+  .row:first-of-type{border-top:none;}
+  .row .k{color:var(--ink-soft); font-family:"Fraunces",serif; font-size:16px;}
+  .row .old{color:var(--clay); text-align:right; min-width:6ch;}
+  .row .new{color:var(--olive); font-weight:700; text-align:right; min-width:6ch;}
+  .row .single{grid-column:2 / 4; text-align:right; color:var(--ink);}
+  .data .cap{font-family:"Fraunces",serif; font-size:14.5px; color:var(--ink-faint);
+    padding:10px 16px; border-top:1px solid var(--line); font-style:italic;}
+
+  /* ---- pull / callout ---- */
+  .turn{margin:54px -26px; padding:46px 36px; background:var(--ink); color:var(--paper);
+    border-radius:18px; position:relative; overflow:hidden;}
+  .turn::after{content:""; position:absolute; right:-40px; bottom:-40px; width:200px; height:200px;
+    background:radial-gradient(circle,var(--accent) 0,transparent 68%); opacity:.34;}
+  .turn .eyebrow{color:var(--accent);}
+  .turn p{font-family:"Bricolage Grotesque",sans-serif; font-weight:500; font-size:clamp(22px,3.4vw,30px);
+    line-height:1.28; letter-spacing:-.015em; max-width:24ch; margin:0; position:relative; z-index:1;}
+  .turn p b{color:var(--accent); font-weight:700;}
+
+  .quote{border-left:3px solid var(--accent); padding:4px 0 4px 24px; margin:30px 0;
+    font-size:22px; line-height:1.4; font-style:italic; color:var(--ink);}
+  .quote .src{display:block; font-style:normal; font-family:"Space Mono",monospace; font-size:12px;
+    letter-spacing:.12em; text-transform:uppercase; color:var(--ink-faint); margin-top:12px;}
+
+  /* ---- lessons ---- */
+  .lessons{counter-reset:l; margin:24px 0;}
+  .lessons .li{display:flex; gap:18px; padding:18px 0; border-top:1px solid var(--line-soft);}
+  .lessons .li::before{counter-increment:l; content:counter(l,decimal-leading-zero);
+    font-family:"Space Mono",monospace; font-size:13px; color:var(--accent-deep); font-weight:700;
+    padding-top:4px; min-width:2.4ch;}
+  .lessons .li p{margin:0; font-size:18.5px;}
+  .lessons .li b{font-family:"Bricolage Grotesque",sans-serif; font-weight:700; color:var(--ink);}
+
+  footer{margin:70px 0 60px; padding-top:26px; border-top:1.5px solid var(--line);
+    font-family:"Space Mono",monospace; font-size:12.5px; color:var(--ink-faint);
+    text-transform:uppercase; letter-spacing:.1em; line-height:1.8;}
+  footer b{color:var(--ink);}
+
+  /* reveal */
+  .js .reveal{opacity:0; transform:translateY(22px);}
+  .js .reveal.in{opacity:1; transform:none; transition:opacity .7s ease, transform .7s cubic-bezier(.2,.7,.2,1);}
+  @media (prefers-reduced-motion:reduce){
+    .js .reveal{opacity:1; transform:none; transition:none;}
+    html{scroll-behavior:auto;}
+  }
+  /* load stagger */
+  .js .pop{opacity:0; animation:pop .8s cubic-bezier(.2,.7,.2,1) forwards;}
+  @keyframes pop{to{opacity:1; transform:none;}}
+  .js .pop{transform:translateY(16px);}
+  @media (max-width:560px){
+    body{font-size:18px;}
+    .turn{margin-left:-18px; margin-right:-18px; padding:34px 24px;}
+    .wrap{padding:0 18px;}
+    .row{grid-template-columns:1fr auto;}
+    .row .old{display:none;}
+  }
+</style>
+</head>
+<body>
+<div id="bar"></div>
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="kicker pop" style="animation-delay:.05s">Band Transcriber · Engineering log</div>
+    <h1 class="pop" style="animation-delay:.12s">Still <span class="em">Off</span>.</h1>
+    <p class="dek pop" style="animation-delay:.22s">Almost every way we tried to transcribe drums — and why most of them failed.</p>
+    <div class="byline pop" style="animation-delay:.32s">
+      <span>By <b>the drum stem &amp; me</b></span>
+      <span>June 16, 2026</span>
+      <span><b>8</b> attempts · <b>1</b> that worked</span>
+    </div>
+  </header>
+
+  <div class="grid-motif pop" style="animation-delay:.42s" aria-hidden="true">
+    <i class="t kick"></i><i class="t hat"></i><i class="t"></i><i class="t hat"></i>
+    <i class="t snare"></i><i class="t hat"></i><i class="t"></i><i class="t hat"></i>
+    <i class="t kick"></i><i class="t hat"></i><i class="t kick"></i><i class="t hat"></i>
+    <i class="t snare"></i><i class="t hat"></i><i class="t"></i><i class="t beat"></i>
+  </div>
+
+  <section>
+    <p class="lead reveal">Band Transcriber splits a song into stems and writes sheet music for each one. The melodic parts came together. The drums did not. For days the feedback was the same three words — <em>“drums are still off”</em> — no matter how many fixes shipped. This is the log of what we tried. Most of it failed. The interesting part is <em>why</em>, and the one time the failure was mine, not the code’s.</p>
+  </section>
+
+  <section class="log">
+    <div class="attempt reveal">
+      <span class="badge b-sup">Superseded</span>
+      <div class="no">Attempt 01 — the original</div>
+      <h3>One onset detector, winner-take-all</h3>
+      <p>Detect every drum onset on the full-band signal, then label each one kick, snare, or hi-hat — whichever class wins.</p>
+      <p class="why"><b>Why it failed:</b> only one drum can win per instant. In a normal groove a hi-hat lands on every eighth note, <em>on top of</em> the kicks and snares. The broadband hat dominated the classifier and masked the lower piece. On a synthetic groove of 4 kicks + 4 snares + 16 hats it detected <b>0 kicks and 0 snares</b> — it called all 15 onsets “hi-hat.”</p>
+    </div>
+
+    <div class="attempt reveal">
+      <span class="badge b-sup">Outgrown</span>
+      <div class="no">Attempt 02 — the heuristic that shipped</div>
+      <h3>Band-wise onsets with energy gating</h3>
+      <p>Give each piece its own frequency band — kick <code>&lt;150&nbsp;Hz</code>, snare <code>200–2000</code>, hi-hat <code>≥6000</code> — and detect each on its own onset envelope, gated by that band’s energy. Now simultaneous hits all register. This one actually shipped.</p>
+      <p class="why"><b>Why we outgrew it:</b> a low ceiling. Only three pieces exist in its whole vocabulary — every tom fill and crash is <em>structurally impossible</em>. And every threshold was tuned on synthetic sine-and-noise drums it had never heard fail on a real recording.</p>
+    </div>
+
+    <div class="attempt reveal">
+      <span class="badge b-lied">The metric lied</span>
+      <div class="no">Attempt 03 — measuring the damage</div>
+      <h3>An honest correction</h3>
+      <p>To prove how bad the hi-hats were, I measured <strong>HF-purity</strong>: the fraction of energy above 6&nbsp;kHz at each detected hat. Result: 0% genuinely high-frequency, 80% bleed. I reported, with confidence, <em>“zero percent of the detected hi-hats are real.”</em></p>
+      <p class="why"><b>That claim was wrong.</b> On a full drum <em>mix</em> the hi-hat is never the loudest thing — kick and snare dominate the spectrum — so even a perfectly correct hat scores near-zero HF-purity. The tell came later: a trained model scored the <em>same</em> low number. A valid proxy (does each hat land on an independent <code>≥8&nbsp;kHz</code> transient?) showed the old hats were actually ~75% legitimate, just sparse. The metric couldn’t tell my best system from my worst — so it wasn’t measuring quality at all.</p>
+    </div>
+  </section>
+
+  <div class="turn reveal">
+    <div class="eyebrow">The turning point</div>
+    <p>Five fixes deep — masking, tempo, grid drift, downbeat phasing, bar consolidation — each one fixing a symptom and revealing the next, and the drums were <b>still off</b>. That’s not a wrong threshold. That’s a wrong architecture.</p>
+  </div>
+
+  <section>
+    <div class="eyebrow reveal">What finally worked</div>
+    <h2 class="reveal">A trained model, not a smarter heuristic</h2>
+    <p class="reveal">We swapped the hand-rolled detector for <strong>ADTOF</strong>, a neural drum-transcription model trained on real recordings. It speaks the whole kit — kick, snare, hi-hat, <em>toms, cymbals and ride</em> — and it’s beat-synchronous by design. On the exact same four-minute stem:</p>
+
+    <div class="data reveal">
+      <div class="h"><span>Same stem · old heuristic vs. ADTOF</span><span>delta</span></div>
+      <div class="row"><span class="k">Toms charted</span><span class="old">0 · impossible</span><span class="new">22</span></div>
+      <div class="row"><span class="k">Cymbals / ride charted</span><span class="old">0 · impossible</span><span class="new">103</span></div>
+      <div class="row"><span class="k">Onsets &gt;25% off the 16th grid</span><span class="old">7%</span><span class="new">0%</span></div>
+      <div class="cap">Verified the only way that can’t be gamed: an A/B with the real drums in one ear and the transcription in the other. Verdict: <em>“missing some kicks, but overall an improvement.”</em> Shipped — behind a fallback to the old heuristic, so drums can never break.</div>
+    </div>
+  </section>
+
+  <section>
+    <div class="eyebrow reveal">The one flaw left</div>
+    <h2 class="reveal">Three ways to fail at the missing kicks</h2>
+    <p class="reveal">ADTOF was better but not perfect: it missed some kicks. So we tried to recover them — three times.</p>
+
+    <div class="log">
+      <div class="attempt reveal">
+        <span class="badge b-fail">Failed</span>
+        <div class="no">Kick fix A</div>
+        <h3>Lower the model’s threshold</h3>
+        <p class="why">ADTOF peak-picks a per-class activation; the kick threshold was already the lowest at <code>0.22</code>. Dropping it to <code>0.11</code> recovered <b>+3 kicks</b>. The misses live in the model’s activation, not the threshold — there was nothing there to pick.</p>
+      </div>
+      <div class="attempt reveal">
+        <span class="badge b-fail">Failed</span>
+        <div class="no">Kick fix B</div>
+        <h3>Hybridise with the old detector</h3>
+        <p class="why">Union ADTOF’s kicks with the old heuristic’s. Against a low-band reference, ADTOF hit 71% recall, the heuristic 52% — and the union: <b>still 71%</b>. The old detector finds a <em>subset</em> of ADTOF’s kicks, not complementary ones. Net gain: one kick.</p>
+      </div>
+      <div class="attempt reveal">
+        <span class="badge b-fail">Failed</span>
+        <div class="no">Kick fix C</div>
+        <h3>Inject guarded low-band onsets</h3>
+        <p class="why">Add a kick wherever a <code>&lt;120&nbsp;Hz</code> onset appears that ADTOF missed. But those onsets weren’t kicks — they were snare/hat/cymbal attacks leaking into the low band, with a beater-click ratio of <b>17.8 vs 2.2</b> for real kicks and <b>38%</b> sitting off the beat (real kicks: 1%). A tight “kick-like and on-grid” filter left <b>1 of 65</b>.</p>
+      </div>
+    </div>
+
+    <p class="reveal">The conclusion was the same from all three angles: the kicks ADTOF misses simply aren’t sitting in the audio as clean, isolated, low-frequency events. You can’t grab what isn’t there. Closing that gap needs a different or fine-tuned model — not another heuristic. So we wrote the limitation down and stopped.</p>
+  </section>
+
+  <div class="quote reveal">
+    “A metric that can’t tell your best system from your worst isn’t measuring quality — it’s measuring your confidence.”
+    <span class="src">— the lesson, learned twice</span>
+  </div>
+
+  <section>
+    <div class="eyebrow reveal">What the failures taught</div>
+    <h2 class="reveal">Five things I’d tell myself on day one</h2>
+    <div class="lessons reveal">
+      <div class="li"><p><b>Symptom fixes compound into a wrong architecture.</b> When every fix reveals a new bug in a new place, stop fixing and question the approach.</p></div>
+      <div class="li"><p><b>Synthetic tests pass for the wrong reasons.</b> The detector aced sine-wave drums and fell apart on a real Demucs stem. Validate on the real thing or you’re measuring nothing.</p></div>
+      <div class="li"><p><b>Pick a metric that can be wrong.</b> HF-purity couldn’t distinguish a great model from a broken one. The fix was a proxy that actually disagreed with my prior.</p></div>
+      <div class="li"><p><b>Some things only ears can settle.</b> Spectral proxies couldn’t judge per-instrument accuracy. A two-channel A/B — real vs. transcribed — could, instantly.</p></div>
+      <div class="li"><p><b>A documented limitation beats a papered-over one.</b> “Misses some kicks, here’s why, here’s what it’d take” is worth more than a fourth fix that quietly makes it worse.</p></div>
+    </div>
+  </section>
+
+  <div class="grid-motif reveal" aria-hidden="true">
+    <i class="t kick"></i><i class="t hat"></i><i class="t"></i><i class="t hat"></i>
+    <i class="t snare"></i><i class="t hat"></i><i class="t kick"></i><i class="t hat"></i>
+    <i class="t kick"></i><i class="t hat"></i><i class="t"></i><i class="t hat"></i>
+    <i class="t snare"></i><i class="t hat"></i><i class="t snare"></i><i class="t kick"></i>
+  </div>
+
+  <footer>
+    Band Transcriber — drum transcription post-mortem<br />
+    <b>Shipped:</b> ADTOF 5-class drums, behind a heuristic fallback ·
+    <b>Open:</b> kick recall ·
+    <b>Method:</b> evidence first, ears last word.
+  </footer>
+
+</div>
+
+<script>
+  document.documentElement.classList.add('js');
+  (function(){
+    var bar=document.getElementById('bar');
+    function prog(){
+      var h=document.documentElement, max=h.scrollHeight-h.clientHeight;
+      bar.style.width=(max>0?(h.scrollTop/max*100):0)+'%';
+    }
+    document.addEventListener('scroll',prog,{passive:true}); prog();
+
+    var io=new IntersectionObserver(function(es){
+      es.forEach(function(e){ if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target);} });
+    },{threshold:.14, rootMargin:'0px 0px -8% 0px'});
+    document.querySelectorAll('.reveal').forEach(function(el){ io.observe(el); });
+  })();
+</script>
+</body>
+</html>
