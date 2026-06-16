@@ -141,20 +141,17 @@ def refine_grid(drum_wav, grid: Grid) -> Grid:
     """
     import librosa
 
-    from .transcribe.drums import _classify
+    from .transcribe.drums import detect_drum_onsets
 
     y, sr = librosa.load(str(drum_wav), sr=22050, mono=True)
     onsets = librosa.onset.onset_detect(y=y, sr=sr, units="time", backtrack=True)
     if len(onsets) < 8:
         return grid
     bpm = _refine_tempo(list(onsets), grid.bpm)
-    win = int(0.05 * sr)
-    downbeat = grid.beat_offset
-    for t in onsets:
-        i = int(t * sr)
-        if _classify(y[i:i + win], sr) == "kick":
-            downbeat = float(t)
-            break
+    # Anchor the downbeat on the first detected kick (band-wise detection finds it even
+    # under a coincident hi-hat); fall back to the coarse phase if no kick is found.
+    kicks = detect_drum_onsets(y, sr).get("kick", [])
+    downbeat = kicks[0] if kicks else grid.beat_offset
     return Grid(bpm=bpm, beat_offset=downbeat)
 
 

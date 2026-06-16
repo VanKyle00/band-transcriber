@@ -54,13 +54,18 @@ def _largest(dur: int) -> int:
     return next(x for x in _CLEAN if x <= dur)
 
 
-def _note_xml(pitch: int, dur: int, chord: bool = False) -> str:
+def _note_xml(pitch: int, dur: int, chord: bool = False,
+              tie_start: bool = False, tie_stop: bool = False) -> str:
     step, octv, head = _DRUM_POS[pitch]
     t, dots = _TYPE[dur]
     hd = f"<notehead>{head}</notehead>" if head else ""
+    kinds = (["stop"] if tie_stop else []) + (["start"] if tie_start else [])
+    tie = "".join(f'<tie type="{k}"/>' for k in kinds)            # sounded tie (after duration)
+    tied = "".join(f'<tied type="{k}"/>' for k in kinds)          # notated tie (in notations)
+    notations = f"<notations>{tied}</notations>" if tied else ""
     return (f"<note>{'<chord/>' if chord else ''}<unpitched><display-step>{step}</display-step>"
-            f"<display-octave>{octv}</display-octave></unpitched><duration>{dur}</duration>"
-            f"<type>{t}</type>{'<dot/>' * dots}{hd}</note>")
+            f"<display-octave>{octv}</display-octave></unpitched><duration>{dur}</duration>{tie}"
+            f"<type>{t}</type>{'<dot/>' * dots}{hd}{notations}</note>")
 
 
 def _rest_xml(dur: int) -> str:
@@ -74,10 +79,22 @@ def _rest_xml(dur: int) -> str:
 
 
 def _event_xml(pitches: set[int], dur: int) -> str:
-    d1 = _largest(dur)
+    # Each hit fills the whole span to the next hit. A non-clean span is written as clean
+    # note values tied together rather than a note trailed by a hard-to-read 16th/32nd
+    # rest, so the hit reads as one extended note while every notehead's drawn type still
+    # matches its <duration> (keeps the OSMD playback cursor aligned).
+    pieces, d = [], dur
+    while d > 0:
+        x = _largest(d)
+        pieces.append(x)
+        d -= x
     ps = sorted(pitches)
-    out = _note_xml(ps[0], d1) + "".join(_note_xml(p, d1, chord=True) for p in ps[1:])
-    return out + (_rest_xml(dur - d1) if dur - d1 else "")
+    out = ""
+    for idx, x in enumerate(pieces):
+        ts, tp = idx < len(pieces) - 1, idx > 0
+        out += _note_xml(ps[0], x, tie_start=ts, tie_stop=tp)
+        out += "".join(_note_xml(p, x, chord=True, tie_start=ts, tie_stop=tp) for p in ps[1:])
+    return out
 
 
 _INSTS = (36, 38, 42)   # kick, snare, hi-hat
@@ -178,15 +195,43 @@ def render_drum_musicxml(midi_path: Path, out_xml: Path, bpm: float = _ASSUMED_B
 
 
 # ---- LilyPond PDF (for download) --------------------------------------------------
+# 16th-grid duration -> LilyPond duration token (whole=1 ... 16th=16, dotted via ".").
+_LY_DUR = {16: "1", 12: "2.", 8: "2", 6: "4.", 4: "4", 3: "8.", 2: "8", 1: "16"}
+
+
+def _ly_dur(name: str, span: int, tie: bool) -> str:
+    """A note/chord/rest of `span` 16ths as LilyPond tokens. Non-clean spans split into
+    clean pieces joined by ties (notes) so a hit reads as one extended note instead of a
+    note trailed by 16th rests; rests use the same split untied."""
+    pieces, d = [], span
+    while d > 0:
+        x = _largest(d)
+        pieces.append(f"{name}{_LY_DUR[x]}")
+        d -= x
+    return (" ~ " if tie else " ").join(pieces)
+
+
+def _lilypond_measure(slots: list[set[int]]) -> str:
+    length = len(slots)
+    hits = [i for i in range(length) if slots[i]]
+    if not hits:
+        return _ly_dur("r", length, tie=False)
+    out, pos = [], 0
+    for k, i in enumerate(hits):
+        if i > pos:
+            out.append(_ly_dur("r", i - pos, tie=False))   # genuine silence before this hit
+        nxt = hits[k + 1] if k + 1 < len(hits) else length
+        names = sorted(_DRUM_LY[p] for p in slots[i])
+        name = names[0] if len(names) == 1 else "<" + " ".join(names) + ">"
+        out.append(_ly_dur(name, nxt - i, tie=True))       # hit extended to the next hit
+        pos = nxt
+    return " ".join(out)
+
+
 def _lilypond(slots: list[set[int]], pickup: int = 0) -> str:
-    tokens = []
-    for s in slots:
-        if not s:
-            tokens.append("r16")
-        else:
-            names = sorted(_DRUM_LY[p] for p in s)
-            tokens.append(f"{names[0]}16" if len(names) == 1 else "<" + " ".join(names) + ">16")
-    body = " ".join(tokens)
+    measures = [slots[:pickup]] if pickup else []
+    measures += [slots[a:a + _GRID] for a in range(pickup, len(slots), _GRID)]
+    body = " |\n    ".join(_lilypond_measure(m) for m in measures)
     partial = f"\\partial 16*{pickup} " if pickup else ""
     return ('\\version "2.24.0"\n#(set-global-staff-size 18)\n'
             '\\score {\n  \\new DrumStaff \\drummode {\n    \\time 4/4\n'

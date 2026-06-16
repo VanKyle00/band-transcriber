@@ -55,6 +55,27 @@ def test_single_frame_octave_jump_smoothed():
     assert notes[0][2] == 48
 
 
+def test_repeated_pitch_splits_on_onset():
+    # same pitch played twice; an amplitude onset at the re-attack splits into two notes
+    pitches = _const(40, 30) + _const(40, 30)
+    notes = segment_pitches(pitches, DT, onset_frames=[30])
+    assert len(notes) == 2
+    assert [p for *_, p in notes] == [40, 40]
+
+
+def test_repeated_pitch_stays_one_note_without_onset():
+    # identical f0 with no onset info -> one note (legacy dropout-repair behavior preserved)
+    pitches = _const(40, 30) + _const(40, 30)
+    assert len(segment_pitches(pitches, DT)) == 1
+
+
+def test_onset_does_not_break_sustained_dropout():
+    # a held note with a brief dropout but no onset at the rejoin stays a single note
+    pitches = _const(43, 20) + [None] * 8 + _const(43, 20)
+    notes = segment_pitches(pitches, DT, max_gap=0.05, merge_gap=0.12, onset_frames=[0])
+    assert len(notes) == 1
+
+
 def test_empty_input():
     assert segment_pitches([], DT) == []
 
