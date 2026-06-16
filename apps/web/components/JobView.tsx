@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { Job } from "@/lib/types";
-import StemPanel from "./StemPanel";
+import PracticeResults from "./PracticeResults";
 
 // Friendly, real-stage-driven steps for the warm loading screen. Keys match the
 // stage strings the pipeline writes (downloading/separating/transcribing); the
@@ -60,13 +60,7 @@ export default function JobView({ jobId }: { jobId: string }) {
   }
 
   if (job?.status === "done") {
-    return (
-      <>
-        <h1>Your transcription</h1>
-        <p className="lede">Job {jobId}</p>
-        {job.artifacts?.stems?.map((stem) => <StemPanel key={stem.name} stem={stem} />)}
-      </>
-    );
+    return <PracticeResults jobId={jobId} job={job} />;
   }
 
   // Still working (no job yet, queued, or processing) → warm, friendly loading screen.
