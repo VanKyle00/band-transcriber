@@ -167,6 +167,15 @@ def process_job(job_id: str, source: str, is_url: bool, stems: list[str],
         storage.update_job(job_id, stage="separating")
         stem_bytes = separate_audio.remote(wav.read_bytes())
 
+        if grid_tuple is not None and "drums" in stem_bytes:
+            try:
+                drum_wav = work / "drums.wav"
+                drum_wav.write_bytes(stem_bytes["drums"])
+                grid = postprocess.refine_grid(drum_wav, postprocess.Grid(*grid_tuple))
+                grid_tuple = (grid.bpm, grid.beat_offset)
+            except Exception as exc:
+                logger.warning("grid refinement failed; using coarse grid: %s", exc)
+
         storage.update_job(job_id, stage="transcribing")
         available = [n for n in stems if n in stem_bytes]
 

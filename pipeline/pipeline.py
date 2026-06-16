@@ -81,9 +81,12 @@ def process_stem(stem_name: str, stem_wav: Path, workdir: Path, job_id: str,
         # with OSMD (so the playback cursor works), plus a LilyPond-engraved PDF to download.
         try:
             bpm = grid.bpm if grid is not None else 120.0
-            xml = drumnotation.render_drum_musicxml(midi, sdir / f"{stem_name}.musicxml", bpm=bpm)
+            downbeat = grid.beat_offset if grid is not None else 0.0
+            xml = drumnotation.render_drum_musicxml(midi, sdir / f"{stem_name}.musicxml",
+                                                    bpm=bpm, downbeat=downbeat)
             out["musicxml"] = storage.upload_artifact(xml, job_id)
-            pdf = drumnotation.render_drum_pdf(midi, sdir / f"{stem_name}.pdf", bpm=bpm)
+            pdf = drumnotation.render_drum_pdf(midi, sdir / f"{stem_name}.pdf",
+                                               bpm=bpm, downbeat=downbeat)
             out["sheet_pdf"] = storage.upload_artifact(pdf, job_id)
         except Exception as exc:
             out["warnings"].append(f"drum notation failed: {exc}")
@@ -132,6 +135,12 @@ def run_pipeline(job_id: str, source: str, is_url: bool,
 
         storage.update_job(job_id, stage="separating")
         separated = separate.separate(wav, work / "stems")
+
+        if grid is not None and "drums" in separated:
+            try:
+                grid = postprocess.refine_grid(separated["drums"], grid)
+            except Exception as exc:
+                logger.warning("grid refinement failed; using coarse grid: %s", exc)
 
         results = []
         for name in stems:
