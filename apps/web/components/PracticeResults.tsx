@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { Job, StemArtifacts } from "@/lib/types";
 import { usePlaybackRate } from "@/lib/usePlaybackRate";
@@ -69,6 +69,8 @@ export default function PracticeResults({ jobId, job }: { jobId: string; job: Jo
   const [audioEl, setAudioEl] = useState<HTMLAudioElement | null>(null);
   const fallbackAudio = useRef<HTMLAudioElement>(null);
   usePlaybackRate(fallbackAudio, speed);
+  // Stable identity so the players' onAudio callback refs don't re-fire on every render.
+  const setAudio = useCallback((el: HTMLAudioElement | null) => setAudioEl(el), []);
 
   // Switching stems: reset the view to that stem's first view and stop playback.
   useEffect(() => {
@@ -79,11 +81,10 @@ export default function PracticeResults({ jobId, job }: { jobId: string; job: Jo
     setAudioEl(null);
   }, [selected]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Apply loop + read play/pause/duration from whichever audio element is active.
+  // Read play/pause/duration from whichever audio element is currently active.
   useEffect(() => {
     const el = audioEl;
     if (!el) return;
-    el.loop = loop;
     setPlaying(!el.paused); // sync to the active element (it changes on view/stem switch)
     const onPlay = () => setPlaying(true);
     const onPause = () => setPlaying(false);
@@ -99,6 +100,11 @@ export default function PracticeResults({ jobId, job }: { jobId: string; job: Jo
       el.removeEventListener("ended", onPause);
       el.removeEventListener("loadedmetadata", onMeta);
     };
+  }, [audioEl]);
+
+  // Apply loop to the active element without re-registering the listeners above.
+  useEffect(() => {
+    if (audioEl) audioEl.loop = loop;
   }, [audioEl, loop]);
 
   // Metronome: a Web Audio click on each beat at the detected tempo, while playing.
@@ -143,7 +149,6 @@ export default function PracticeResults({ jobId, job }: { jobId: string; job: Jo
   const views = viewsFor(stem);
   const ownAudio = viewHasOwnAudio(stem, view);
   const durLabel = fmtTime(duration); // "" until known (or if the audio length is unknown/∞)
-  const setAudio = (el: HTMLAudioElement | null) => setAudioEl(el);
   const togglePlay = () => {
     const el = audioEl;
     if (!el) return;
@@ -240,27 +245,29 @@ export default function PracticeResults({ jobId, job }: { jobId: string; job: Jo
           )}
         </div>
 
-        <div className="bt-speed">
-          <div className="bt-speed-head">
-            <span className="bt-speed-label">🐢 Slow it down</span>
-            <span className="bt-speed-val">
-              {Math.round(speed * 100)}% speed{bpm ? ` · ${Math.round(bpm * speed)} BPM` : ""}
-            </span>
+        {stem.audio && (
+          <div className="bt-speed">
+            <div className="bt-speed-head">
+              <span className="bt-speed-label">🐢 Slow it down</span>
+              <span className="bt-speed-val">
+                {Math.round(speed * 100)}% speed{bpm ? ` · ${Math.round(bpm * speed)} BPM` : ""}
+              </span>
+            </div>
+            <input
+              type="range"
+              min={50}
+              max={100}
+              step={5}
+              value={Math.round(speed * 100)}
+              onChange={(e) => setSpeed(+e.target.value / 100)}
+              aria-label="Playback speed"
+            />
+            <div className="bt-speed-ends">
+              <span>Half speed</span>
+              <span>Full speed</span>
+            </div>
           </div>
-          <input
-            type="range"
-            min={50}
-            max={100}
-            step={5}
-            value={Math.round(speed * 100)}
-            onChange={(e) => setSpeed(+e.target.value / 100)}
-            aria-label="Playback speed"
-          />
-          <div className="bt-speed-ends">
-            <span>Half speed</span>
-            <span>Full speed</span>
-          </div>
-        </div>
+        )}
 
         <div className="bt-card-actions">
           <button type="button" className={`bt-loop${loop ? " on" : ""}`} onClick={() => setLoop((v) => !v)}>
