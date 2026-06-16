@@ -2,6 +2,8 @@
 
 import { useEffect, useRef } from "react";
 
+import { usePlaybackRate } from "@/lib/usePlaybackRate";
+
 type Slice = { time: number; x: number; y: number; w: number; h: number };
 
 // Renders a MusicXML score with OpenSheetMusicDisplay. With an audio URL it becomes
@@ -9,9 +11,18 @@ type Slice = { time: number; x: number; y: number; w: number; h: number };
 // We walk OSMD's cursor once to capture each note-slice's time (from its score timestamp +
 // tempo) and on-screen rect (from the note's own SVG element — independent of OSMD's
 // shared, collision-prone cursor element), then drive our own overlay box.
-export default function SheetMusic({ url, audioUrl }: { url: string; audioUrl?: string }) {
+export default function SheetMusic({
+  url,
+  audioUrl,
+  speed = 1,
+}: {
+  url: string;
+  audioUrl?: string;
+  speed?: number;
+}) {
   const host = useRef<HTMLDivElement>(null);
   const audio = useRef<HTMLAudioElement>(null);
+  usePlaybackRate(audio, speed);
 
   useEffect(() => {
     let cancelled = false;

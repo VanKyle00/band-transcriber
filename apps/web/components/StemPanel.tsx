@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import type { StemArtifacts } from "@/lib/types";
+import { usePlaybackRate } from "@/lib/usePlaybackRate";
 import PianoRoll from "./PianoRoll";
 import SheetMusic from "./SheetMusic";
 import Tab from "./Tab";
@@ -18,6 +19,11 @@ export default function StemPanel({ stem }: { stem: StemArtifacts }) {
   ].filter(Boolean) as View[];
 
   const [view, setView] = useState<View>(available[0] ?? "roll");
+  // "Slow it down": 1 = full speed, down to 0.5 = half. Threaded into each player so
+  // the slider controls whichever view is showing; pitch is preserved (see hook).
+  const [speed, setSpeed] = useState(1);
+  const fallbackAudio = useRef<HTMLAudioElement>(null);
+  usePlaybackRate(fallbackAudio, speed);
 
   return (
     <section className="card">
@@ -56,20 +62,42 @@ export default function StemPanel({ stem }: { stem: StemArtifacts }) {
       )}
 
       {view === "sheet" && stem.musicxml && (
-        <SheetMusic url={stem.musicxml} audioUrl={stem.audio} />
+        <SheetMusic url={stem.musicxml} audioUrl={stem.audio} speed={speed} />
       )}
       {view === "tab" && (stem.tab || stem.tab_alphatex) && (
-        <Tab url={stem.tab} alphatexUrl={stem.tab_alphatex} audioUrl={stem.audio} />
+        <Tab url={stem.tab} alphatexUrl={stem.tab_alphatex} audioUrl={stem.audio} speed={speed} />
       )}
       {view === "roll" && stem.midi && (
-        <PianoRoll url={stem.midi} audioUrl={stem.audio} id={stem.name} />
+        <PianoRoll url={stem.midi} audioUrl={stem.audio} id={stem.name} speed={speed} />
       )}
 
       {/* Piano roll, the interactive sheet, and the alphaTab tab each carry their own
           player; show the plain stem audio only for views without one (e.g. ASCII tab). */}
       {!(view === "roll" || (view === "sheet" && stem.musicxml) || (view === "tab" && stem.tab_alphatex)) &&
         stem.audio && (
-        <audio controls src={stem.audio} style={{ width: "100%", marginTop: 14 }} />
+        <audio ref={fallbackAudio} controls src={stem.audio} style={{ width: "100%", marginTop: 14 }} />
+      )}
+
+      {stem.audio && (
+        <div className="bt-speed">
+          <div className="bt-speed-head">
+            <span className="bt-speed-label">🐢 Slow it down</span>
+            <span className="bt-speed-val">{Math.round(speed * 100)}% speed</span>
+          </div>
+          <input
+            type="range"
+            min={50}
+            max={100}
+            step={5}
+            value={Math.round(speed * 100)}
+            onChange={(e) => setSpeed(+e.target.value / 100)}
+            aria-label="Playback speed"
+          />
+          <div className="bt-speed-ends">
+            <span>Half speed</span>
+            <span>Full speed</span>
+          </div>
+        </div>
       )}
 
       {stem.warnings?.length > 0 && (

@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { usePlaybackRate } from "@/lib/usePlaybackRate";
+
 // A readable, self-contained piano roll: pitch-labelled axis on the left, notes on a
 // time x pitch grid that zooms (horizontally) and pans (horizontal scroll), with a
 // playhead synced to the stem's separated audio. Replaces html-midi-player, whose
@@ -22,10 +24,12 @@ export default function PianoRoll({
   url,
   audioUrl,
   id,
+  speed = 1,
 }: {
   url: string;
   audioUrl?: string;
   id: string;
+  speed?: number;
 }) {
   const [notes, setNotes] = useState<Note[] | null>(null);
   const [duration, setDuration] = useState(1);
@@ -33,6 +37,7 @@ export default function PianoRoll({
   const [tip, setTip] = useState<string | null>(null);
   const [playT, setPlayT] = useState(0);
   const audio = useRef<HTMLAudioElement>(null);
+  usePlaybackRate(audio, speed);
 
   useEffect(() => {
     let cancelled = false;

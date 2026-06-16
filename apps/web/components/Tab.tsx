@@ -2,11 +2,23 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { usePlaybackRate } from "@/lib/usePlaybackRate";
+
 // Tab renders two ways:
 //  - if an AlphaTex artifact exists, alphaTab engraves an interactive staff + tab
 //  - otherwise we fall back to the server-generated ASCII tab in a <pre>
-export default function Tab({ url, alphatexUrl, audioUrl }: { url?: string; alphatexUrl?: string; audioUrl?: string }) {
-  if (alphatexUrl) return <AlphaTexTab url={alphatexUrl} audioUrl={audioUrl} />;
+export default function Tab({
+  url,
+  alphatexUrl,
+  audioUrl,
+  speed = 1,
+}: {
+  url?: string;
+  alphatexUrl?: string;
+  audioUrl?: string;
+  speed?: number;
+}) {
+  if (alphatexUrl) return <AlphaTexTab url={alphatexUrl} audioUrl={audioUrl} speed={speed} />;
   if (url) return <AsciiTab url={url} />;
   return null;
 }
@@ -53,7 +65,7 @@ function loadAlphaTab(): Promise<any> {
 // We enable alphaTab's player only for its beat cursor, keep it muted, and drive the cursor
 // from the SEPARATED STEM audio (the real recording) — so what you hear matches the cursor.
 // Clicking a note moves alphaTab's cursor to that beat; we seek the stem audio to match.
-function AlphaTexTab({ url, audioUrl }: { url: string; audioUrl?: string }) {
+function AlphaTexTab({ url, audioUrl, speed = 1 }: { url: string; audioUrl?: string; speed?: number }) {
   const ref = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -61,6 +73,7 @@ function AlphaTexTab({ url, audioUrl }: { url: string; audioUrl?: string }) {
   const readyRef = useRef(false);
   const endRef = useRef(0); // alphaTab's total song time (ms), to scale tab<->audio time
   const [error, setError] = useState<string | null>(null);
+  usePlaybackRate(audioRef, speed);
 
   useEffect(() => {
     let cancelled = false;
