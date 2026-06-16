@@ -141,6 +141,9 @@ def run_pipeline(job_id: str, source: str, is_url: bool,
             results.append(process_stem(name, separated[name], work / "out", job_id, grid=grid))
 
         artifacts = {"stems": results}
+        meta = postprocess.build_meta(grid.bpm if grid is not None else None)
+        if meta:
+            artifacts["meta"] = meta
         storage.update_job(job_id, status="done", stage="done", artifacts=artifacts)
         return artifacts
     except Exception as exc:

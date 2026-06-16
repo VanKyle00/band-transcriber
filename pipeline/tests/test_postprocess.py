@@ -6,7 +6,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from pipeline.postprocess import Grid, Note, _fold_tempo, quantize_and_clean
+from pipeline.postprocess import Grid, Note, _fold_tempo, build_meta, quantize_and_clean
 
 
 def test_fold_tempo_in_range_unchanged():
@@ -176,6 +176,34 @@ def test_apply_key_inserts_key_signature():
 
     found = score.parts[0].getElementsByClass(m21key.KeySignature)
     assert len(found) >= 1
+
+
+def test_build_meta_rounds_bpm():
+    assert build_meta(96.4) == {"bpm": 96}
+
+
+def test_build_meta_rounds_bpm_up():
+    assert build_meta(119.6) == {"bpm": 120}
+
+
+def test_build_meta_none_is_empty():
+    assert build_meta(None) == {}
+
+
+def test_build_meta_nonpositive_is_empty():
+    assert build_meta(0.0) == {}
+
+
+def test_build_meta_negative_is_empty():
+    assert build_meta(-120.0) == {}
+
+
+def test_build_meta_inf_is_empty():
+    assert build_meta(float("inf")) == {}
+
+
+def test_build_meta_nan_is_empty():
+    assert build_meta(float("nan")) == {}
 
 
 if __name__ == "__main__":

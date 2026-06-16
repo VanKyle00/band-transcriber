@@ -15,10 +15,12 @@ export default function SheetMusic({
   url,
   audioUrl,
   speed = 1,
+  onAudio,
 }: {
   url: string;
   audioUrl?: string;
   speed?: number;
+  onAudio?: (el: HTMLAudioElement | null) => void;
 }) {
   const host = useRef<HTMLDivElement>(null);
   const audio = useRef<HTMLAudioElement>(null);
@@ -152,7 +154,15 @@ export default function SheetMusic({
     <div>
       <div className="osmd" ref={host} />
       {audioUrl && (
-        <audio ref={audio} controls src={audioUrl} style={{ width: "100%", marginTop: 10 }} />
+        <audio
+          ref={(el) => {
+            audio.current = el;
+            onAudio?.(el);
+          }}
+          controls
+          src={audioUrl}
+          style={{ width: "100%", marginTop: 10 }}
+        />
       )}
     </div>
   );

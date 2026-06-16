@@ -12,13 +12,15 @@ export default function Tab({
   alphatexUrl,
   audioUrl,
   speed = 1,
+  onAudio,
 }: {
   url?: string;
   alphatexUrl?: string;
   audioUrl?: string;
   speed?: number;
+  onAudio?: (el: HTMLAudioElement | null) => void;
 }) {
-  if (alphatexUrl) return <AlphaTexTab url={alphatexUrl} audioUrl={audioUrl} speed={speed} />;
+  if (alphatexUrl) return <AlphaTexTab url={alphatexUrl} audioUrl={audioUrl} speed={speed} onAudio={onAudio} />;
   if (url) return <AsciiTab url={url} />;
   return null;
 }
@@ -65,7 +67,7 @@ function loadAlphaTab(): Promise<any> {
 // We enable alphaTab's player only for its beat cursor, keep it muted, and drive the cursor
 // from the SEPARATED STEM audio (the real recording) — so what you hear matches the cursor.
 // Clicking a note moves alphaTab's cursor to that beat; we seek the stem audio to match.
-function AlphaTexTab({ url, audioUrl, speed = 1 }: { url: string; audioUrl?: string; speed?: number }) {
+function AlphaTexTab({ url, audioUrl, speed = 1, onAudio }: { url: string; audioUrl?: string; speed?: number; onAudio?: (el: HTMLAudioElement | null) => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -147,7 +149,16 @@ function AlphaTexTab({ url, audioUrl, speed = 1 }: { url: string; audioUrl?: str
       </p>
       <div className="alphatab" ref={ref} />
       {audioUrl && (
-        <audio ref={audioRef} controls src={audioUrl} style={{ width: "100%", marginTop: 10 }} onTimeUpdate={onTime} />
+        <audio
+          ref={(el) => {
+            audioRef.current = el;
+            onAudio?.(el);
+          }}
+          controls
+          src={audioUrl}
+          style={{ width: "100%", marginTop: 10 }}
+          onTimeUpdate={onTime}
+        />
       )}
     </div>
   );

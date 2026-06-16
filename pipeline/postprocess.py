@@ -105,6 +105,13 @@ def detect_tempo(wav) -> Grid:
     return Grid(bpm=bpm, beat_offset=beat_offset)
 
 
+def build_meta(bpm: float | None) -> dict:
+    """Job-level metadata for the artifacts manifest. Empty when tempo is unknown."""
+    if bpm is None or not math.isfinite(bpm) or bpm <= 0:
+        return {}
+    return {"bpm": round(bpm)}
+
+
 def apply_to_midi(midi_path, grid: Grid, *, monophonic: bool, subdiv: int = 4):
     """Quantize+clean every instrument in a MIDI file and rewrite it at the grid tempo."""
     import pretty_midi

@@ -178,6 +178,9 @@ def process_job(job_id: str, source: str, is_url: bool, stems: list[str],
 
         results = [c.get() for c in render_calls]
         artifacts = {"stems": results}
+        meta = postprocess.build_meta(grid_tuple[0] if grid_tuple is not None else None)
+        if meta:
+            artifacts["meta"] = meta
         storage.update_job(job_id, status="done", stage="done", artifacts=artifacts)
         return artifacts
     except Exception as exc:
