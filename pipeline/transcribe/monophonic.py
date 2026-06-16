@@ -36,7 +36,7 @@ def _smooth(pitches: list[float | None], window: int) -> list[float | None]:
 
 def segment_pitches(pitches, frame_dt, *, smooth: int = 5, pitch_tol: float = 0.7,
                     min_note_dur: float = 0.06, max_gap: float = 0.05,
-                    merge_gap: float = 0.10):
+                    merge_gap: float = 0.10, onset_frames=None):
     """Turn a per-frame f0 track into note events.
 
     `pitches[i]` is the MIDI pitch of frame i, or None when unvoiced; `frame_dt` is
@@ -47,7 +47,14 @@ def segment_pitches(pitches, frame_dt, *, smooth: int = 5, pitch_tol: float = 0.
     running median; it survives unvoiced gaps up to `max_gap`s. Same-pitch notes
     split by up to `merge_gap`s are re-joined (repairs sustained notes broken by brief
     voicing dropouts), and notes shorter than `min_note_dur` are dropped.
+
+    `onset_frames` (frame indices of amplitude attacks) forces a note boundary at a
+    re-articulation: without it the segmenter only splits on pitch change, so a bass or
+    vocal line repeating the same pitch ("E-E-E-E") collapsed into one sustained note.
+    A frame carrying an onset starts a fresh note and blocks the dropout-repair merge,
+    so a real re-attack splits while a confidence dropout mid-note still rejoins.
     """
+    onset = set(int(f) for f in onset_frames) if onset_frames is not None else set()
     p = _smooth(list(pitches), smooth)
     runs: list[list] = []  # [start_idx, last_voiced_idx, [pitches]]
     cur: list | None = None
@@ -55,26 +62,27 @@ def segment_pitches(pitches, frame_dt, *, smooth: int = 5, pitch_tol: float = 0.
         if val is not None:
             if cur is None:
                 cur = [i, i, [val]]
-            elif abs(val - _median(cur[2])) <= pitch_tol:
-                cur[1] = i
-                cur[2].append(val)
-            else:
+            elif i in onset or abs(val - _median(cur[2])) > pitch_tol:
                 runs.append(cur)
                 cur = [i, i, [val]]
+            else:
+                cur[1] = i
+                cur[2].append(val)
         elif cur is not None and (i - cur[1]) * frame_dt > max_gap:
             runs.append(cur)
             cur = None
     if cur is not None:
         runs.append(cur)
 
-    raw = [(s * frame_dt, (e + 1) * frame_dt, int(round(_median(ps)))) for s, e, ps in runs]
+    raw = [(s * frame_dt, (e + 1) * frame_dt, int(round(_median(ps))), s) for s, e, ps in runs]
     merged: list[list] = []
-    for start, end, pitch in raw:
-        if merged and merged[-1][2] == pitch and start - merged[-1][1] <= merge_gap:
+    for start, end, pitch, sframe in raw:
+        if (merged and merged[-1][2] == pitch and start - merged[-1][1] <= merge_gap
+                and sframe not in onset):
             merged[-1][1] = end
         else:
-            merged.append([start, end, pitch])
-    return [(start, end, pitch) for start, end, pitch in merged if end - start >= min_note_dur]
+            merged.append([start, end, pitch, sframe])
+    return [(s, e, pitch) for s, e, pitch, _ in merged if e - s >= min_note_dur]
 
 
 def transcribe_monophonic(wav: Path, out_midi: Path, *, fmin: float, fmax: float,
@@ -101,7 +109,13 @@ def transcribe_monophonic(wav: Path, out_midi: Path, *, fmin: float, fmax: float
     period = periodicity.squeeze().numpy()
     frames = [float(m) if (np.isfinite(m) and pr >= confidence) else None
               for m, pr in zip(pitch, period)]
-    notes = segment_pitches(frames, hop / sr)
+    # Amplitude attacks let segment_pitches articulate repeated same-pitch notes; the
+    # hop matches CREPE's so onset frame indices line up with `frames`.
+    onset_env = librosa.onset.onset_strength(y=y, sr=sr, hop_length=hop)
+    onset_frames = librosa.onset.onset_detect(
+        onset_envelope=onset_env, sr=sr, hop_length=hop, backtrack=False
+    )
+    notes = segment_pitches(frames, hop / sr, onset_frames=onset_frames)
 
     pm = pretty_midi.PrettyMIDI()
     inst = pretty_midi.Instrument(program=program)
