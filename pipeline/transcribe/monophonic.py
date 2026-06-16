@@ -1,17 +1,17 @@
-"""Monophonic-stem transcription via pYIN (audio -> MIDI).
+"""Monophonic-stem transcription via CREPE (audio -> MIDI).
 
-Bass and lead vocals are single-voice, so a monophonic f0 tracker (librosa pYIN)
-beats the general polyphonic model on them: it locks onto the *fundamental* instead
-of a harmonic (no more octave-jumped bass) and its voiced flag drops the phantom
-notes a polyphonic model invents during breaths/consonants. Output is a MIDI track
-that the post-processor then quantizes to the beat grid.
+Bass and lead vocals are single-voice. pYIN (the previous tracker) only reliably
+followed ~half of a real-world bass and jumped around on the rest, so the notes it
+produced were essentially noise. CREPE -- a deep neural pitch tracker -- follows the
+same bass ~93% of the time and far more stably, including the low/fast lines pYIN
+can't resolve. We keep the pure `segment_pitches` core and feed it CREPE's per-frame
+pitch + confidence.
 
-`segment_pitches` is pure (no heavy deps) so it unit-tests anywhere; the pYIN call
-and MIDI writing import their deps lazily.
+`segment_pitches` imports no heavy deps so it unit-tests anywhere; the CREPE call and
+MIDI writing import torch/torchcrepe/pretty_midi lazily.
 """
 from __future__ import annotations
 
-import math
 from pathlib import Path
 
 
@@ -77,28 +77,30 @@ def segment_pitches(pitches, frame_dt, *, smooth: int = 5, pitch_tol: float = 0.
     return [(start, end, pitch) for start, end, pitch in merged if end - start >= min_note_dur]
 
 
-def _frame_length(fmin: float, sr: int) -> int:
-    """pYIN needs a few periods of the lowest searched pitch per analysis frame."""
-    need = 4.0 * sr / fmin
-    return max(2048, 1 << int(math.ceil(math.log2(need))))
-
-
 def transcribe_monophonic(wav: Path, out_midi: Path, *, fmin: float, fmax: float,
-                          program: int = 0, sr: int = 22050, hop: int = 256,
-                          prob_threshold: float = 0.5) -> Path:
-    """Transcribe a known-monophonic stem to MIDI via pYIN f0 tracking."""
+                          program: int = 0, confidence: float = 0.5,
+                          model: str = "tiny") -> Path:
+    """Transcribe a known-monophonic stem to MIDI via CREPE pitch tracking.
+
+    `model` is the CREPE size: "tiny" is ~15x faster than "full" on CPU for the same
+    coverage here, so it's the default. `confidence` gates CREPE's periodicity.
+    """
     import librosa
     import numpy as np
     import pretty_midi
+    import torch
+    import torchcrepe
 
+    sr, hop = 16000, 160                 # CREPE runs at 16 kHz; hop 160 = 10 ms frames
     y, _ = librosa.load(str(wav), sr=sr, mono=True)
-    f0, _voiced, vprob = librosa.pyin(
-        y, fmin=fmin, fmax=fmax, sr=sr, hop_length=hop,
-        frame_length=_frame_length(fmin, sr),
+    pitch_hz, periodicity = torchcrepe.predict(
+        torch.tensor(y).unsqueeze(0), sr, hop_length=hop, fmin=fmin, fmax=fmax,
+        model=model, return_periodicity=True, batch_size=512,
     )
-    pitch = librosa.hz_to_midi(f0)
-    frames = [float(m) if (np.isfinite(m) and vp >= prob_threshold) else None
-              for m, vp in zip(pitch, vprob)]
+    pitch = librosa.hz_to_midi(pitch_hz.squeeze().numpy())
+    period = periodicity.squeeze().numpy()
+    frames = [float(m) if (np.isfinite(m) and pr >= confidence) else None
+              for m, pr in zip(pitch, period)]
     notes = segment_pitches(frames, hop / sr)
 
     pm = pretty_midi.PrettyMIDI()

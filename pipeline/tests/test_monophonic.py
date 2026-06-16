@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from pipeline.transcribe.monophonic import _frame_length, segment_pitches
+from pipeline.transcribe.monophonic import segment_pitches
 
 DT = 0.01  # 10 ms frames
 
@@ -61,9 +61,3 @@ def test_empty_input():
 
 def test_all_unvoiced():
     assert segment_pitches([None] * 50, DT) == []
-
-
-def test_frame_length_grows_for_low_fmin():
-    # bass needs a longer window than vocals to resolve its low fundamentals
-    assert _frame_length(35.0, 22050) > _frame_length(75.0, 22050)
-    assert _frame_length(75.0, 22050) >= 2048
