@@ -142,6 +142,7 @@ export default function PracticeResults({ jobId, job }: { jobId: string; job: Jo
 
   const views = viewsFor(stem);
   const ownAudio = viewHasOwnAudio(stem, view);
+  const durLabel = fmtTime(duration); // "" until known (or if the audio length is unknown/∞)
   const setAudio = (el: HTMLAudioElement | null) => setAudioEl(el);
   const togglePlay = () => {
     const el = audioEl;
@@ -165,7 +166,7 @@ export default function PracticeResults({ jobId, job }: { jobId: string; job: Jo
         <div className="bt-hero-chips">
           {bpm ? <span className="bt-meta">♩ {bpm} BPM</span> : null}
           <span className="bt-meta">{stems.length} {stems.length === 1 ? "part" : "parts"}</span>
-          {duration ? <span className="bt-meta">{fmtTime(duration)}</span> : null}
+          {durLabel ? <span className="bt-meta">{durLabel}</span> : null}
         </div>
       </div>
 
