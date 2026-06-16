@@ -52,7 +52,8 @@ input[type="text"], input[type="url"] {
   border: 1px solid var(--border); background: var(--panel-2); color: var(--text);
 }
 .dropzone {
-  border: 1px dashed var(--border); border-radius: 10px; padding: 26px;
+  display: block;
+  border: 1px dashed var(--border); border-radius: 10px; padding: 16px;
   text-align: center; color: var(--muted); background: var(--panel-2);
 }
 .stem-toggles { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0; }
