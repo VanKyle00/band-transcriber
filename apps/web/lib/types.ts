@@ -17,7 +17,7 @@ export type Job = {
   status: JobStatus;
   stage?: string;
   source_type?: string;
-  artifacts?: { stems: StemArtifacts[] };
+  artifacts?: { stems: StemArtifacts[]; meta?: { bpm?: number } };
   error?: string;
   created_at?: string;
   expires_at?: string;
