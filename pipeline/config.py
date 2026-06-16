@@ -32,6 +32,8 @@ class StemSpec:
     clef: str = "treble"             # treble | bass | grand | percussion | treble_8vb
     tuning: list[int] | None = None  # set => generate tablature with this tuning
     experimental: bool = False       # surfaced as a badge in the UI; never blocks the job
+    fmin: float | None = None        # monophonic stems: pYIN pitch-search floor (Hz)
+    fmax: float | None = None        # monophonic stems: pYIN pitch-search ceiling (Hz)
 
 
 # Order matters: this is also the display order in the UI.
@@ -43,11 +45,12 @@ STEMS: dict[str, StemSpec] = {
     "bass": StemSpec(
         name="bass", transcriber="melodic", polyphonic=False,
         outputs=("midi", "musicxml", "sheet", "tab", "pianoroll", "audio"),
-        clef="bass", tuning=BASS_TUNING,
+        clef="bass", tuning=BASS_TUNING, fmin=35.0, fmax=400.0,
     ),
     "vocals": StemSpec(
         name="vocals", transcriber="melodic", polyphonic=False,
         outputs=("midi", "musicxml", "sheet", "pianoroll", "audio"), clef="treble",
+        fmin=75.0, fmax=1100.0,
     ),
     "guitar": StemSpec(
         name="guitar", transcriber="melodic", polyphonic=True,

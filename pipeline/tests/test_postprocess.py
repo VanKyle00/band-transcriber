@@ -6,32 +6,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from pipeline.postprocess import Grid, Note, _fold_tempo, build_meta, quantize_and_clean
-
-
-def test_fold_tempo_in_range_unchanged():
-    assert _fold_tempo(120.0) == 120.0
-
-
-def test_fold_tempo_doubles_slow():
-    assert _fold_tempo(50.0) == 100.0
-
-
-def test_fold_tempo_halves_fast():
-    assert _fold_tempo(200.0) == 100.0
-
-
-def test_fold_tempo_keeps_lower_bound():
-    assert _fold_tempo(60.0) == 60.0
-
-
-def test_fold_tempo_keeps_upper_bound():
-    assert _fold_tempo(180.0) == 180.0
-
-
-def test_fold_tempo_rejects_nonpositive():
-    with pytest.raises(ValueError):
-        _fold_tempo(0.0)
+from pipeline.postprocess import Grid, Note, build_meta, quantize_and_clean
 
 
 def test_quantize_snaps_to_16th_grid():
@@ -129,13 +104,15 @@ def test_detect_tempo_unpacks_array_tempo(monkeypatch):
 
     from pipeline.postprocess import detect_tempo
 
-    # beat_track returns tempo as a shape-(1,) array and beats as times in seconds.
-    monkeypatch.setattr(librosa, "load", lambda *a, **k: (np.zeros(1000), 22050))
+    # feature.tempo returns a shape-(1,) array; beat_track yields beat times in seconds.
+    monkeypatch.setattr(librosa, "load", lambda *a, **k: (np.zeros(2048), 22050))
+    monkeypatch.setattr(librosa.onset, "onset_strength", lambda **k: np.zeros(64))
+    monkeypatch.setattr(librosa.feature, "tempo", lambda **k: np.array([184.6]))
     monkeypatch.setattr(librosa.beat, "beat_track",
-                        lambda **k: (np.array([120.0]), np.array([0.05, 0.55])))
+                        lambda **k: (np.array([184.6]), np.array([0.05, 0.37])))
 
     grid = detect_tempo("ignored.wav")
-    assert grid.bpm == 120.0
+    assert abs(grid.bpm - 184.6) < 1e-6
     assert abs(grid.beat_offset - 0.05) < 1e-9
 
 
