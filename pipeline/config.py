@@ -45,7 +45,7 @@ STEMS: dict[str, StemSpec] = {
     "bass": StemSpec(
         name="bass", transcriber="melodic", polyphonic=False,
         outputs=("midi", "musicxml", "sheet", "tab", "pianoroll", "audio"),
-        clef="bass", tuning=BASS_TUNING, fmin=35.0, fmax=400.0,
+        clef="bass_8vb", tuning=BASS_TUNING, fmin=35.0, fmax=400.0,
     ),
     "vocals": StemSpec(
         name="vocals", transcriber="melodic", polyphonic=False,

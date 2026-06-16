@@ -12,6 +12,7 @@ _CLEFS = {
     "treble": "TrebleClef",
     "bass": "BassClef",
     "treble_8vb": "Treble8vbClef",
+    "bass_8vb": "Bass8vbClef",
     "percussion": "PercussionClef",
 }
 

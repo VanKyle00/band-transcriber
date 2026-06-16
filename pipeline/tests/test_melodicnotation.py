@@ -64,3 +64,25 @@ def test_render_preserves_pitch_and_aligns_downbeat(tmp_path):
     notes = list(converter.parse(str(xml)).recurse().notes)
     assert [n.pitch.midi for n in notes] == [60, 62]              # pitches preserved
     assert abs(notes[0].beat - 1.0) < 1e-6                        # downbeat note on count 1
+
+
+def test_bass_8vb_clef_is_octave_down_with_unchanged_pitch(tmp_path):
+    pretty_midi = pytest.importorskip("pretty_midi")
+    pytest.importorskip("music21")
+    from music21 import clef, converter
+
+    from pipeline.melodicnotation import render_melodic_musicxml
+
+    pm = pretty_midi.PrettyMIDI()
+    inst = pretty_midi.Instrument(program=33)
+    inst.notes.append(pretty_midi.Note(velocity=80, pitch=28, start=0.5, end=1.0))  # E1
+    pm.instruments.append(inst)
+    midi = tmp_path / "b.mid"
+    pm.write(str(midi))
+
+    xml = render_melodic_musicxml(midi, tmp_path / "b.musicxml", clef="bass_8vb",
+                                  bpm=120.0, downbeat=0.5)
+    sc = converter.parse(str(xml))
+    cl = sc.parts[0].recurse().getElementsByClass(clef.Clef)[0]
+    assert cl.octaveChange == -1                                  # drawn an octave higher
+    assert [n.pitch.midi for n in sc.recurse().notes] == [28]     # but sounds unchanged (E1)

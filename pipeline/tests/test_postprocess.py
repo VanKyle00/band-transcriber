@@ -168,6 +168,27 @@ def test_drum_kick_lands_on_count_one(tmp_path):
     assert abs(first.beat - 1.0) < 1e-6                            # first kick on count 1
 
 
+def test_consolidate_unifies_near_identical_measures():
+    from pipeline.drumnotation import _GRID, _consolidate
+
+    K, S, H = 36, 38, 42
+    m1 = [({K} if i == 0 else {S} if i == 8 else {H} if i % 2 == 0 else set()) for i in range(_GRID)]
+    m2 = [set(x) for x in m1]
+    m2[6].discard(H)                                   # same groove, one dropped hi-hat
+    out = _consolidate(m1 + m2, pickup=0)
+    assert out[:_GRID] == out[_GRID:2 * _GRID]         # now rendered identically
+
+
+def test_consolidate_keeps_distinct_measures():
+    from pipeline.drumnotation import _GRID, _consolidate
+
+    K, S = 36, 38
+    groove = [({K} if i == 0 else set()) for i in range(_GRID)]
+    fill = [{S} for _ in range(_GRID)]                 # nothing like the groove
+    out = _consolidate([set(x) for x in groove] + [set(x) for x in fill], pickup=0)
+    assert out[:_GRID] != out[_GRID:]                  # left distinct
+
+
 def test_drum_slots_scale_with_tempo(tmp_path):
     pretty_midi = pytest.importorskip("pretty_midi")
     from pipeline.drumnotation import _slots

@@ -24,8 +24,10 @@ _FLAT = [("C", 0), ("D", -1), ("D", 0), ("E", -1), ("E", 0), ("F", 0),
          ("G", -1), ("G", 0), ("A", -1), ("A", 0), ("B", -1), ("B", 0)]
 _MAJOR = (0, 2, 4, 5, 7, 9, 11)
 _ACC = {1: "sharp", -1: "flat", 0: "natural"}
-# clef name -> (sign, line, octave-change)
-_CLEF = {"treble": ("G", 2, 0), "bass": ("F", 4, 0), "treble_8vb": ("G", 2, -1)}
+# clef name -> (sign, line, octave-change). The 8vb clefs draw notes an octave higher
+# than they sound (an "8" under the clef), which keeps low bass off the ledger lines.
+_CLEF = {"treble": ("G", 2, 0), "bass": ("F", 4, 0),
+         "treble_8vb": ("G", 2, -1), "bass_8vb": ("F", 4, -1)}
 
 
 def _diatonic(fifths: int) -> set[int]:
