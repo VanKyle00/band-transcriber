@@ -80,28 +80,48 @@ def _event_xml(pitches: set[int], dur: int) -> str:
     return out + (_rest_xml(dur - d1) if dur - d1 else "")
 
 
-def _measure_xml(num: int, slots: list[set[int]], first: bool) -> str:
+def _phase(slots: list[set[int]], bpm: float, downbeat: float) -> tuple[list[set[int]], int]:
+    """Pickup length (in 16th slots) that puts `downbeat` on a barline, padding the slot
+    list so whole 4/4 measures follow the pickup. pickup=0 when no/zero downbeat."""
+    sec_per_slot = (60.0 / bpm) * (4.0 / _GRID)
+    pickup = round(downbeat / sec_per_slot) % _GRID if downbeat and downbeat > 0 else 0
+    while (len(slots) - pickup) % _GRID:
+        slots.append(set())
+    return slots, pickup
+
+
+def _measure_xml(num: int, slots: list[set[int]], *, first: bool, implicit: bool = False) -> str:
+    length = len(slots)
     attrs = ("<attributes><divisions>4</divisions><time><beats>4</beats><beat-type>4</beat-type>"
              "</time><clef><sign>percussion</sign><line>2</line></clef></attributes>") if first else ""
-    hits = [i for i in range(_GRID) if slots[i]]
+    imp = ' implicit="yes"' if implicit else ""
+    hits = [i for i in range(length) if slots[i]]
     body, pos = "", 0
     if not hits:
-        body = _rest_xml(_GRID)
+        body = _rest_xml(length)
     for k, i in enumerate(hits):
         if i > pos:
             body += _rest_xml(i - pos)
-        nxt = hits[k + 1] if k + 1 < len(hits) else _GRID
+        nxt = hits[k + 1] if k + 1 < len(hits) else length
         body += _event_xml(slots[i], nxt - i)
         pos = nxt
-    return f'<measure number="{num}">{attrs}{body}</measure>'
+    return f'<measure number="{num}"{imp}>{attrs}{body}</measure>'
 
 
-def render_drum_musicxml(midi_path: Path, out_xml: Path, bpm: float = _ASSUMED_BPM) -> Path:
-    """Emit a percussion-staff MusicXML (kick/snare/hi-hat at standard positions, x hi-hats)."""
-    slots = _slots(midi_path, bpm)
+def render_drum_musicxml(midi_path: Path, out_xml: Path, bpm: float = _ASSUMED_BPM,
+                         downbeat: float = 0.0) -> Path:
+    """Emit a percussion-staff MusicXML (kick/snare/hi-hat at standard positions, x hi-hats).
+
+    `downbeat` (seconds) phases the barlines so the first kick reads on count 1; the
+    pre-downbeat audio becomes a leading pickup measure, which keeps the notation
+    spanning the full-length stem audio so the playback cursor stays in sync.
+    """
+    slots, pickup = _phase(_slots(midi_path, bpm), bpm, downbeat)
+    bounds = ([(0, pickup, True)] if pickup else [])
+    bounds += [(i, i + _GRID, False) for i in range(pickup, len(slots), _GRID)]
     measures = "".join(
-        _measure_xml(m + 1, slots[m * _GRID:(m + 1) * _GRID], first=(m == 0))
-        for m in range(len(slots) // _GRID)
+        _measure_xml(n if pickup else n + 1, slots[a:b], first=(n == 0), implicit=imp)
+        for n, (a, b, imp) in enumerate(bounds)
     )
     xml = ('<?xml version="1.0" encoding="UTF-8"?>\n'
            '<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN" '
@@ -114,7 +134,7 @@ def render_drum_musicxml(midi_path: Path, out_xml: Path, bpm: float = _ASSUMED_B
 
 
 # ---- LilyPond PDF (for download) --------------------------------------------------
-def _lilypond(slots: list[set[int]]) -> str:
+def _lilypond(slots: list[set[int]], pickup: int = 0) -> str:
     tokens = []
     for s in slots:
         if not s:
@@ -123,17 +143,20 @@ def _lilypond(slots: list[set[int]]) -> str:
             names = sorted(_DRUM_LY[p] for p in s)
             tokens.append(f"{names[0]}16" if len(names) == 1 else "<" + " ".join(names) + ">16")
     body = " ".join(tokens)
+    partial = f"\\partial 16*{pickup} " if pickup else ""
     return ('\\version "2.24.0"\n#(set-global-staff-size 18)\n'
             '\\score {\n  \\new DrumStaff \\drummode {\n    \\time 4/4\n'
-            f'    {body}\n  }}\n  \\layout {{ }}\n}}\n')
+            f'    {partial}{body}\n  }}\n  \\layout {{ }}\n}}\n')
 
 
-def render_drum_pdf(midi_path: Path, out_pdf: Path, bpm: float = _ASSUMED_BPM) -> Path:
+def render_drum_pdf(midi_path: Path, out_pdf: Path, bpm: float = _ASSUMED_BPM,
+                    downbeat: float = 0.0) -> Path:
     """Engrave a clean printable drum chart via LilyPond's drum mode."""
     out_pdf.parent.mkdir(parents=True, exist_ok=True)
     work = out_pdf.parent
     ly = work / "drums.ly"
-    ly.write_text(_lilypond(_slots(midi_path, bpm)), encoding="utf-8")
+    slots, pickup = _phase(_slots(midi_path, bpm), bpm, downbeat)
+    ly.write_text(_lilypond(slots, pickup), encoding="utf-8")
     base = work / "drums_render"
     subprocess.run(["lilypond", "--pdf", "-dno-point-and-click", "-o", str(base), str(ly)],
                    check=True, capture_output=True)

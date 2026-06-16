@@ -116,6 +116,58 @@ def test_detect_tempo_unpacks_array_tempo(monkeypatch):
     assert abs(grid.beat_offset - 0.05) < 1e-9
 
 
+def test_refine_tempo_snaps_to_true_grid():
+    from pipeline.postprocess import _refine_tempo
+
+    slot = (60.0 / 180.0) / 4.0                 # 16th note at the true tempo (180 BPM)
+    onsets = [i * slot for i in range(64)]       # onsets sitting exactly on a 180 grid
+    assert abs(_refine_tempo(onsets, 186.0) - 180.0) < 1.0
+
+
+def test_refine_tempo_too_few_onsets_unchanged():
+    from pipeline.postprocess import _refine_tempo
+
+    assert _refine_tempo([0.0, 0.5], 185.0) == 185.0
+
+
+def test_phase_pickup_puts_downbeat_on_barline():
+    from pipeline.drumnotation import _GRID, _phase
+
+    slots = [set() for _ in range(20)]
+    out, pickup = _phase(slots, 120.0, 0.5)      # 16th = 0.125s -> 0.5s is 4 slots in
+    assert pickup == 4
+    assert (len(out) - pickup) % _GRID == 0
+
+
+def test_phase_zero_downbeat_no_pickup():
+    from pipeline.drumnotation import _GRID, _phase
+
+    out, pickup = _phase([set() for _ in range(10)], 120.0, 0.0)
+    assert pickup == 0
+    assert len(out) % _GRID == 0
+
+
+def test_drum_kick_lands_on_count_one(tmp_path):
+    pretty_midi = pytest.importorskip("pretty_midi")
+    pytest.importorskip("music21")
+    from music21 import converter
+
+    from pipeline.drumnotation import render_drum_musicxml
+
+    pm = pretty_midi.PrettyMIDI()
+    drum = pretty_midi.Instrument(program=0, is_drum=True)
+    for t in (0.5, 1.0, 1.5, 2.0):               # kicks; 0.5s is the downbeat
+        drum.notes.append(pretty_midi.Note(velocity=100, pitch=36, start=t, end=t + 0.05))
+    pm.instruments.append(drum)
+    midi = tmp_path / "d.mid"
+    pm.write(str(midi))
+
+    xml = render_drum_musicxml(midi, tmp_path / "d.musicxml", bpm=120.0, downbeat=0.5)
+    assert 'implicit="yes"' in xml.read_text(encoding="utf-8")     # a pickup measure exists
+    first = next(n for n in converter.parse(str(xml)).recurse().notes)
+    assert abs(first.beat - 1.0) < 1e-6                            # first kick on count 1
+
+
 def test_drum_slots_scale_with_tempo(tmp_path):
     pretty_midi = pytest.importorskip("pretty_midi")
     from pipeline.drumnotation import _slots

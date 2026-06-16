@@ -22,6 +22,33 @@ class Grid(NamedTuple):
     beat_offset: float
 
 
+def _refine_tempo(onsets, bpm0: float, *, span: float = 0.06, steps: int = 49) -> float:
+    """Refine a coarse tempo by maximizing onset concentration on the 16th grid.
+
+    librosa's autocorrelation tempo can land a few percent off the true tempo, which
+    makes the quantization grid drift across the song (the printed backbeat slowly
+    creeps off the beat). Search a narrow band around `bpm0` for the tempo whose 16th
+    grid the onsets cluster on most tightly, measured phase-free via circular
+    concentration. Returns `bpm0` unchanged when there are too few onsets to fit.
+    """
+    pts = [float(t) for t in onsets]
+    if len(pts) < 8 or not math.isfinite(bpm0) or bpm0 <= 0:
+        return bpm0
+    best_bpm, best_r = bpm0, -1.0
+    for k in range(steps):
+        bpm = bpm0 * (1 - span) + (2 * span * bpm0) * k / (steps - 1)
+        slot = (60.0 / bpm) / 4.0
+        c = s = 0.0
+        for t in pts:
+            ang = 2 * math.pi * ((t / slot) % 1.0)
+            c += math.cos(ang)
+            s += math.sin(ang)
+        r = math.hypot(c, s) / len(pts)
+        if r > best_r:
+            best_bpm, best_r = bpm, r
+    return best_bpm
+
+
 def _slot_seconds(grid: Grid, subdiv: int) -> float:
     return (60.0 / grid.bpm) / subdiv
 
@@ -101,6 +128,34 @@ def detect_tempo(wav) -> Grid:
     _, beats = librosa.beat.beat_track(onset_envelope=oenv, sr=sr, units="time", start_bpm=bpm)
     beat_offset = float(beats[0]) if len(beats) else 0.0
     return Grid(bpm=bpm, beat_offset=beat_offset)
+
+
+def refine_grid(drum_wav, grid: Grid) -> Grid:
+    """Sharpen the grid using the isolated drum stem.
+
+    The mix-level `detect_tempo` gives a usable tempo but a rough beat phase. Once the
+    drums are separated we can do better: refine the tempo by fitting the drum onsets
+    (kills the cross-song drift) and anchor the beat phase to the first kick, which is
+    almost always the downbeat — so measures line up and the kick reads on count 1.
+    Falls back to `grid` unchanged if the drums are unusable.
+    """
+    import librosa
+
+    from .transcribe.drums import _classify
+
+    y, sr = librosa.load(str(drum_wav), sr=22050, mono=True)
+    onsets = librosa.onset.onset_detect(y=y, sr=sr, units="time", backtrack=True)
+    if len(onsets) < 8:
+        return grid
+    bpm = _refine_tempo(list(onsets), grid.bpm)
+    win = int(0.05 * sr)
+    downbeat = grid.beat_offset
+    for t in onsets:
+        i = int(t * sr)
+        if _classify(y[i:i + win], sr) == "kick":
+            downbeat = float(t)
+            break
+    return Grid(bpm=bpm, beat_offset=downbeat)
 
 
 def build_meta(bpm: float | None) -> dict:
