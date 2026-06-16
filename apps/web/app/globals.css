@@ -1,13 +1,16 @@
+/* Warm "Practice Buddy" theme tokens — cream paper + soft orange. The whole app
+   shares these so every page (home, header, cost, job loading/results) reads warm.
+   #ECE7DF is the design's page background. */
 :root {
-  --bg: #0f1115;
-  --panel: #181b22;
-  --panel-2: #20242d;
-  --border: #2a2f3a;
-  --text: #e6e8ec;
-  --muted: #9aa3b2;
-  --accent: #6ea8fe;
-  --warn: #f0b429;
-  --bad: #ef6461;
+  --bg: #ECE7DF;
+  --panel: #FFFBF5;
+  --panel-2: #F4E7D6;
+  --border: #E7D8C4;
+  --text: #2A2018;
+  --muted: #9a8b76;
+  --accent: #E8743B;
+  --warn: #C98A4E;
+  --bad: #c0392b;
 }
 
 * { box-sizing: border-box; }
@@ -16,24 +19,39 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font: 15px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  font: 15px/1.5 var(--font-nunito), system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
 }
 
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
+input[type="checkbox"] { accent-color: var(--accent); }
+
 .site-header {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 14px 24px; border-bottom: 1px solid var(--border); background: var(--panel);
+  padding: 14px 24px; border-bottom: 1.5px solid var(--border); background: var(--panel);
 }
-.site-header .brand { font-weight: 700; color: var(--text); }
-.site-header nav a { margin-left: 18px; color: var(--muted); }
+.site-header .brand {
+  display: inline-flex; align-items: center; gap: 10px;
+  font-family: var(--font-bricolage), system-ui, sans-serif; font-weight: 700; font-size: 16px; color: var(--text);
+}
+.brand-logo {
+  width: 30px; height: 30px; border-radius: 8px; background: var(--accent);
+  display: inline-flex; align-items: flex-end; justify-content: center; gap: 2px; padding-bottom: 7px;
+}
+.brand-logo i { width: 3px; background: #fff; border-radius: 2px; }
+.brand-logo i:nth-child(1) { height: 8px; }
+.brand-logo i:nth-child(2) { height: 13px; }
+.brand-logo i:nth-child(3) { height: 6px; }
+.site-header nav a { margin-left: 18px; color: var(--muted); font-weight: 700; }
+.site-header nav a:hover { color: var(--text); text-decoration: none; }
 
 .container { max-width: 920px; margin: 0 auto; padding: 28px 24px 80px; }
 
-h1 { font-size: 28px; margin: 0 0 8px; }
-h2 { font-size: 20px; margin: 28px 0 10px; }
-.lede { color: var(--muted); margin: 0 0 24px; }
+h1, h2 { font-family: var(--font-bricolage), system-ui, sans-serif; font-weight: 800; letter-spacing: -0.02em; }
+h1 { font-size: 30px; margin: 0 0 8px; line-height: 1.1; }
+h2 { font-size: 21px; margin: 28px 0 10px; }
+.lede { color: #6b5a48; margin: 0 0 24px; }
 
 .card {
   background: var(--panel); border: 1px solid var(--border);
@@ -60,8 +78,10 @@ input[type="text"], input[type="url"] {
 .stem-toggles label { display: flex; align-items: center; gap: 6px; color: var(--muted); }
 
 button.primary {
-  background: var(--accent); color: #0b1220; border: none; font-weight: 600;
-  padding: 11px 18px; border-radius: 9px; cursor: pointer;
+  background: var(--accent); color: #fff; border: none; font-weight: 800;
+  font-family: var(--font-nunito), system-ui, sans-serif;
+  padding: 11px 18px; border-radius: 11px; cursor: pointer;
+  box-shadow: 0 8px 18px -8px var(--accent);
 }
 button.primary:disabled { opacity: .5; cursor: not-allowed; }
 

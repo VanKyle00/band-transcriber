@@ -28,7 +28,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body className={`${bricolage.variable} ${nunito.variable}`}>
         <header className="site-header">
-          <Link href="/" className="brand">🎚️ Band Transcriber</Link>
+          <Link href="/" className="brand">
+            <span className="brand-logo" aria-hidden="true">
+              <i />
+              <i />
+              <i />
+            </span>
+            Band Transcriber
+          </Link>
           <nav>
             <Link href="/">Transcribe</Link>
             <Link href="/cost">Hosting cost</Link>
