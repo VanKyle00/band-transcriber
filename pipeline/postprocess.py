@@ -1,7 +1,7 @@
 """Post-processing layer: tempo detection + rhythmic quantization + note cleanup.
 
 Sits between transcription (raw MIDI) and notation. The pure-logic core
-(`quantize_and_clean`, `_fold_tempo`) imports no ML deps so it unit-tests anywhere;
+(`quantize_and_clean`) imports no ML deps so it unit-tests anywhere;
 `detect_tempo` (librosa) and `apply_to_midi` (pretty_midi) import their heavy deps lazily.
 """
 from __future__ import annotations
@@ -20,17 +20,6 @@ class Note(NamedTuple):
 class Grid(NamedTuple):
     bpm: float
     beat_offset: float
-
-
-def _fold_tempo(bpm: float) -> float:
-    """Fold a detected tempo into a musical [60, 180] BPM range, inclusive (half/double-time guard)."""
-    if not math.isfinite(bpm) or bpm <= 0:
-        raise ValueError(f"bad tempo: {bpm}")
-    while bpm < 60:
-        bpm *= 2
-    while bpm > 180:
-        bpm /= 2
-    return bpm
 
 
 def _slot_seconds(grid: Grid, subdiv: int) -> float:
@@ -94,13 +83,22 @@ def quantize_and_clean(notes, grid: Grid, *, monophonic: bool, subdiv: int = 4) 
 
 
 def detect_tempo(wav) -> Grid:
-    """Estimate a global tempo + first-beat offset from the mix (librosa beat tracking)."""
+    """Estimate a global tempo + first-beat offset from the mix (librosa).
+
+    Tempo is estimated with a log-normal prior centered at 140 BPM rather than
+    librosa's default 120. Band music sits ~110-180, and the 120 prior tends to lock
+    onto the *half* tempo (a real 184 BPM reads as 92), which doubles every printed
+    note value. The prior is wide enough that a clearly slow song still reads slow.
+    """
     import librosa
     import numpy as np
 
     y, sr = librosa.load(str(wav), mono=True)
-    tempo, beats = librosa.beat.beat_track(y=y, sr=sr, units="time")
-    bpm = _fold_tempo(float(np.atleast_1d(tempo)[0]))  # beat_track returns a shape-(1,) array
+    oenv = librosa.onset.onset_strength(y=y, sr=sr)
+    bpm = float(np.atleast_1d(
+        librosa.feature.tempo(onset_envelope=oenv, sr=sr, start_bpm=140.0)
+    )[0])  # feature.tempo returns a shape-(1,) array
+    _, beats = librosa.beat.beat_track(onset_envelope=oenv, sr=sr, units="time", start_bpm=bpm)
     beat_offset = float(beats[0]) if len(beats) else 0.0
     return Grid(bpm=bpm, beat_offset=beat_offset)
 
