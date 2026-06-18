@@ -73,12 +73,17 @@ export default function SubmitForm() {
           />
         </label>
       ) : (
-        <input
-          type="url"
-          placeholder="https://www.youtube.com/watch?v=…"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-        />
+        <>
+          <input
+            type="url"
+            placeholder="https://www.youtube.com/watch?v=…"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+          />
+          <p className="error" style={{ marginTop: 8 }}>
+            Note: YouTube uploads are currently not working due to proxy limiting.
+          </p>
+        </>
       )}
 
       <div className="stem-toggles">
