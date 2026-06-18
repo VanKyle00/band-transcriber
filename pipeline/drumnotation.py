@@ -1,5 +1,9 @@
 """Drum notation from a classified drum MIDI.
 
+Both renderings use the standard two-voice drum-chart layout: hi-hat/cymbals get an
+upward-stemmed top voice and the kit (kick/snare/toms) a downward-stemmed bottom voice, so
+the pulse and the backbeat read as two independent lines instead of one cramped union rhythm.
+
 Two renderings from the same kick/snare/hi-hat 16th grid:
   - ``render_drum_musicxml`` → a proper percussion-staff MusicXML (distinct staff positions
     per piece, x-notehead hi-hats, hits extended to the next event so the rhythm reads as
@@ -56,7 +60,8 @@ def _largest(dur: int) -> int:
 
 
 def _note_xml(pitch: int, dur: int, chord: bool = False,
-              tie_start: bool = False, tie_stop: bool = False) -> str:
+              tie_start: bool = False, tie_stop: bool = False,
+              voice: int = 2, stem: str = "down") -> str:
     step, octv, head = _DRUM_POS[pitch]
     t, dots = _TYPE[dur]
     hd = f"<notehead>{head}</notehead>" if head else ""
@@ -66,20 +71,21 @@ def _note_xml(pitch: int, dur: int, chord: bool = False,
     notations = f"<notations>{tied}</notations>" if tied else ""
     return (f"<note>{'<chord/>' if chord else ''}<unpitched><display-step>{step}</display-step>"
             f"<display-octave>{octv}</display-octave></unpitched><duration>{dur}</duration>{tie}"
-            f"<type>{t}</type>{'<dot/>' * dots}{hd}{notations}</note>")
+            f"<voice>{voice}</voice><type>{t}</type>{'<dot/>' * dots}<stem>{stem}</stem>{hd}{notations}</note>")
 
 
-def _rest_xml(dur: int) -> str:
+def _rest_xml(dur: int, voice: int | None = None) -> str:
+    v = f"<voice>{voice}</voice>" if voice is not None else ""
     out = ""
     while dur > 0:
         d = _largest(dur)
         t, dots = _TYPE[d]
-        out += f"<note><rest/><duration>{d}</duration><type>{t}</type>{'<dot/>' * dots}</note>"
+        out += f"<note><rest/><duration>{d}</duration>{v}<type>{t}</type>{'<dot/>' * dots}</note>"
         dur -= d
     return out
 
 
-def _event_xml(pitches: set[int], dur: int) -> str:
+def _event_xml(pitches: set[int], dur: int, voice: int = 2, stem: str = "down") -> str:
     # Each hit fills the whole span to the next hit. A non-clean span is written as clean
     # note values tied together rather than a note trailed by a hard-to-read 16th/32nd
     # rest, so the hit reads as one extended note while every notehead's drawn type still
@@ -93,12 +99,36 @@ def _event_xml(pitches: set[int], dur: int) -> str:
     out = ""
     for idx, x in enumerate(pieces):
         ts, tp = idx < len(pieces) - 1, idx > 0
-        out += _note_xml(ps[0], x, tie_start=ts, tie_stop=tp)
-        out += "".join(_note_xml(p, x, chord=True, tie_start=ts, tie_stop=tp) for p in ps[1:])
+        out += _note_xml(ps[0], x, tie_start=ts, tie_stop=tp, voice=voice, stem=stem)
+        out += "".join(_note_xml(p, x, chord=True, tie_start=ts, tie_stop=tp, voice=voice, stem=stem)
+                       for p in ps[1:])
     return out
 
 
+# Two-voice layout (standard drum-chart engraving): cymbals/hi-hat get an upward-stemmed
+# top voice, the kit (kick/snare/toms) a downward-stemmed bottom voice, so the pulse and the
+# backbeat read as two independent lines instead of one cramped union rhythm.
+_VOICE_UP = (42, 49)        # hi-hat, cymbals/ride -> voice 1, stems up
+_VOICE_DOWN = (36, 38, 47)  # kick, snare, toms    -> voice 2, stems down
 _INSTS = (36, 38, 42, 47, 49)   # kick, snare, hi-hat, toms, cymbals
+
+
+def _voice_xml(slots: list[set[int]], insts: tuple[int, ...], voice: int, stem: str) -> str:
+    """One voice's notes across a measure: its instruments' hits, each extended to that
+    voice's next hit, with the gaps before a hit written as rests."""
+    iset = set(insts)
+    length = len(slots)
+    hits = [i for i in range(length) if slots[i] & iset]
+    if not hits:
+        return _rest_xml(length, voice)
+    body, pos = "", 0
+    for k, i in enumerate(hits):
+        if i > pos:
+            body += _rest_xml(i - pos, voice)
+        nxt = hits[k + 1] if k + 1 < len(hits) else length
+        body += _event_xml(slots[i] & iset, nxt - i, voice=voice, stem=stem)
+        pos = nxt
+    return body
 
 
 def _consolidate(slots: list[set[int]], pickup: int, *, tol: int = 4) -> list[set[int]]:
@@ -156,16 +186,18 @@ def _measure_xml(num: int, slots: list[set[int]], *, first: bool, implicit: bool
     attrs = ("<attributes><divisions>4</divisions><time><beats>4</beats><beat-type>4</beat-type>"
              "</time><clef><sign>percussion</sign><line>2</line></clef></attributes>") if first else ""
     imp = ' implicit="yes"' if implicit else ""
-    hits = [i for i in range(length) if slots[i]]
-    body, pos = "", 0
-    if not hits:
-        body = _rest_xml(length)
-    for k, i in enumerate(hits):
-        if i > pos:
-            body += _rest_xml(i - pos)
-        nxt = hits[k + 1] if k + 1 < len(hits) else length
-        body += _event_xml(slots[i], nxt - i)
-        pos = nxt
+    up_has = any(slots[i] & set(_VOICE_UP) for i in range(length))
+    down_has = any(slots[i] & set(_VOICE_DOWN) for i in range(length))
+    if up_has and down_has:
+        up = _voice_xml(slots, _VOICE_UP, 1, "up")
+        down = _voice_xml(slots, _VOICE_DOWN, 2, "down")
+        body = f'{up}<backup><duration>{length}</duration></backup>{down}'
+    elif up_has:
+        body = _voice_xml(slots, _VOICE_UP, 1, "up")
+    elif down_has:
+        body = _voice_xml(slots, _VOICE_DOWN, 2, "down")
+    else:
+        body = _rest_xml(length, 1)                      # silent bar -> one whole rest
     return f'<measure number="{num}"{imp}>{attrs}{body}</measure>'
 
 
@@ -212,21 +244,38 @@ def _ly_dur(name: str, span: int, tie: bool) -> str:
     return (" ~ " if tie else " ").join(pieces)
 
 
-def _lilypond_measure(slots: list[set[int]]) -> str:
+def _ly_voice(slots: list[set[int]], insts: tuple[int, ...]) -> str | None:
+    """One voice's LilyPond tokens (only `insts`' hits), each extended to that voice's next
+    hit; None when the voice never plays in the measure."""
+    iset = set(insts)
     length = len(slots)
-    hits = [i for i in range(length) if slots[i]]
+    hits = [i for i in range(length) if slots[i] & iset]
     if not hits:
-        return _ly_dur("r", length, tie=False)
+        return None
     out, pos = [], 0
     for k, i in enumerate(hits):
         if i > pos:
             out.append(_ly_dur("r", i - pos, tie=False))   # genuine silence before this hit
         nxt = hits[k + 1] if k + 1 < len(hits) else length
-        names = sorted(_DRUM_LY[p] for p in slots[i])
+        names = sorted(_DRUM_LY[p] for p in (slots[i] & iset))
         name = names[0] if len(names) == 1 else "<" + " ".join(names) + ">"
         out.append(_ly_dur(name, nxt - i, tie=True))       # hit extended to the next hit
         pos = nxt
     return " ".join(out)
+
+
+def _lilypond_measure(slots: list[set[int]]) -> str:
+    """A measure as two stem-separated voices (hi-hat/cymbals up, kit down); collapses to a
+    single voice when only one plays and to a whole rest when the bar is silent."""
+    up = _ly_voice(slots, _VOICE_UP)
+    down = _ly_voice(slots, _VOICE_DOWN)
+    if up is not None and down is not None:
+        return f"<< {{ {up} }} \\\\ {{ {down} }} >>"       # \\ separates simultaneous voices
+    if up is not None:
+        return up
+    if down is not None:
+        return down
+    return _ly_dur("r", len(slots), tie=False)
 
 
 def _lilypond(slots: list[set[int]], pickup: int = 0) -> str:

@@ -32,8 +32,9 @@ def test_event_xml_type_matches_duration():
     type_for = {16: "whole", 12: "half", 8: "half", 6: "quarter", 4: "quarter",
                 3: "eighth", 2: "eighth", 1: "16th"}
     for span in range(1, 17):
-        for note in re.findall(r"<duration>(\d+)</duration>[^<]*(?:<tie[^>]*/>)*<type>(\w+)</type>",
-                               _event_xml({KICK}, span)):
+        for note in re.findall(
+                r"<duration>(\d+)</duration>(?:<tie[^>]*/>)*<voice>\d+</voice><type>(\w+)</type>",
+                _event_xml({KICK}, span)):
             assert type_for[int(note[0])] == note[1]
 
 
@@ -56,10 +57,12 @@ def test_lilypond_measure_no_internal_16th_rests():
 
 def _measure_sixteenths(body):
     inv = {v: k for k, v in _LY_DUR.items()}
+    if "\\\\" in body:                          # two voices: each fills the bar -> check one
+        body = body.split("\\\\")[0]
     total = 0
     for tok in body.replace("~", " ").split():
         m = re.search(r"(\d+\.?)$", tok)
-        if m:
+        if m and m.group(1) in inv:
             total += inv[m.group(1)]
     return total
 
@@ -136,3 +139,37 @@ def test_consolidate_preserves_toms_and_cymbals():
     out = _consolidate(slots, pickup=0)
     present = set().union(*out)
     assert TOM in present and CYMBAL in present
+
+
+# ---- two-voice engraving (hi-hat/cymbals stems up, kit stems down) ------------------
+def test_musicxml_two_voice_splits_pulse_and_backbeat(tmp_path):
+    # a groove with hats (up voice) over kick/snare (down voice) must render as two voices:
+    # a <backup> between them, hi-hat stems up in voice 1, kick stems down in voice 2.
+    mid = tmp_path / "d.mid"
+    events = [(s * 0.25, HIHAT) for s in range(8)]                  # hats on every eighth
+    events += [(0.0, KICK), (1.0, SNARE), (2.0, KICK), (3.0, SNARE)]  # backbeat, 120 BPM
+    _write_drum_midi(mid, events)
+    xml = render_drum_musicxml(mid, tmp_path / "d.musicxml", bpm=120).read_text()
+    assert "<backup>" in xml
+    assert "<voice>1</voice>" in xml and "<voice>2</voice>" in xml
+    assert "<stem>up</stem>" in xml and "<stem>down</stem>" in xml
+
+
+def test_lilypond_two_voice_when_both_play():
+    slots = [set() for _ in range(_GRID)]
+    for slot in range(0, _GRID, 2):
+        slots[slot] = {HIHAT}                                       # hats: up voice
+    slots[0] |= {KICK}
+    slots[8] |= {SNARE}                                             # kit: down voice
+    body = _lilypond_measure(slots)
+    assert body.startswith("<<") and "\\\\" in body                # two simultaneous voices
+    assert _measure_sixteenths(body) == _GRID                      # each voice fills the bar
+
+
+def test_single_voice_measure_has_no_backup(tmp_path):
+    # kick-only bar: only the down voice plays -> no second voice / backup
+    mid = tmp_path / "d.mid"
+    _write_drum_midi(mid, [(0.0, KICK), (1.0, KICK), (2.0, KICK), (3.0, KICK)])
+    xml = render_drum_musicxml(mid, tmp_path / "d.musicxml", bpm=120).read_text()
+    assert "<backup>" not in xml
+    assert "<voice>1</voice>" not in xml

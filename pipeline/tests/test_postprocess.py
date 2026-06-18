@@ -66,6 +66,64 @@ def test_monophony_truncates_lingering_note():
     assert out == [Note(0.0, 0.25, 60, 100), Note(0.25, 0.5, 62, 100)]
 
 
+def test_legato_bridges_subbeat_gap_to_next_onset():
+    grid = Grid(bpm=120.0, beat_offset=0.0)        # slot = 0.125s; one beat = 4 slots
+    # two distinct pitches a 2-slot (eighth) rest apart -> first extends to the second
+    notes = [Note(0.0, 0.125, 40, 100), Note(0.375, 0.5, 42, 100)]
+    out = quantize_and_clean(notes, grid, monophonic=True)
+    assert out == [Note(0.0, 0.375, 40, 100), Note(0.375, 0.5, 42, 100)]
+
+
+def test_legato_keeps_beat_or_longer_rests():
+    grid = Grid(bpm=120.0, beat_offset=0.0)
+    # a full-beat (4-slot) gap is a genuine rest -> NOT bridged
+    notes = [Note(0.0, 0.125, 40, 100), Note(0.625, 0.75, 42, 100)]
+    out = quantize_and_clean(notes, grid, monophonic=True)
+    assert out[0] == Note(0.0, 0.125, 40, 100)
+
+
+def test_legato_preserves_onsets_and_pitches():
+    grid = Grid(bpm=120.0, beat_offset=0.0)
+    notes = [Note(0.0, 0.125, 40, 100), Note(0.25, 0.375, 43, 100),
+             Note(0.5, 0.75, 45, 100)]
+    out = quantize_and_clean(notes, grid, monophonic=True)
+    assert [n.start for n in out] == [0.0, 0.25, 0.5]   # onsets untouched
+    assert [n.pitch for n in out] == [40, 43, 45]       # pitches untouched
+
+
+def test_legato_only_applies_to_monophonic():
+    grid = Grid(bpm=120.0, beat_offset=0.0)
+    notes = [Note(0.0, 0.125, 40, 100), Note(0.375, 0.5, 42, 100)]
+    out = quantize_and_clean(notes, grid, monophonic=False)
+    assert out[0] == Note(0.0, 0.125, 40, 100)          # polyphonic: gap left as a rest
+
+
+def test_octave_fold_pulls_down_octave_outlier():
+    from pipeline.postprocess import _octave_fold
+    notes = [Note(i * 0.5, i * 0.5 + 0.25, p, 100) for i, p in enumerate([40, 40, 52, 40, 40])]
+    assert [n.pitch for n in _octave_fold(notes)] == [40, 40, 40, 40, 40]
+
+
+def test_octave_fold_keeps_moderate_leap():
+    from pipeline.postprocess import _octave_fold
+    # a +7 (perfect fifth) leap is real bass motion, below the threshold -> untouched
+    notes = [Note(i * 0.5, i * 0.5 + 0.25, p, 100) for i, p in enumerate([40, 40, 47, 40, 40])]
+    assert [n.pitch for n in _octave_fold(notes)] == [40, 40, 47, 40, 40]
+
+
+def test_octave_fold_leaves_in_register_line():
+    from pipeline.postprocess import _octave_fold
+    notes = [Note(i * 0.5, i * 0.5 + 0.25, p, 100) for i, p in enumerate([40, 43, 45, 43, 40])]
+    assert [n.pitch for n in _octave_fold(notes)] == [40, 43, 45, 43, 40]
+
+
+def test_octave_fold_applies_only_to_monophonic():
+    grid = Grid(bpm=120.0, beat_offset=0.0)
+    notes = [Note(i * 0.5, i * 0.5 + 0.5, p, 100) for i, p in enumerate([40, 40, 52, 40, 40])]
+    assert 52 in [n.pitch for n in quantize_and_clean(notes, grid, monophonic=False)]
+    assert 52 not in [n.pitch for n in quantize_and_clean(notes, grid, monophonic=True)]
+
+
 def test_quantize_empty_input_returns_empty():
     grid = Grid(bpm=120.0, beat_offset=0.0)
     assert quantize_and_clean([], grid, monophonic=False) == []

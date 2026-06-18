@@ -91,8 +91,56 @@ def _enforce_monophony(notes: list[Note], slot: float) -> list[Note]:
     return result
 
 
+def _legato(notes: list[Note], slot: float, max_gap_slots: int) -> list[Note]:
+    """Extend each note over short rests to the next note's onset (monophonic legato).
+
+    CREPE's pitch segmentation ends notes a few tens of ms early (confidence dips at
+    note transitions), so the staff fills every gap with a 16th/8th rest and a sustained
+    bass line reads as a staccato stutter — note, rest, note, rest. Bridging sub-beat
+    gaps (shorter than `max_gap_slots` 16th-slots) to the next onset makes it read as
+    connected notes the way bass actually sounds; gaps a beat or longer are left as
+    genuine rests. Only note *ends* move — onsets and pitches are untouched, so the
+    OSMD/alphaTab playback cursor (keyed on note start) stays in sync."""
+    result = list(notes)
+    for i in range(len(result) - 1):
+        gap = result[i + 1].start - result[i].end
+        if 0 < gap < max_gap_slots * slot:
+            result[i] = result[i]._replace(end=result[i + 1].start)
+    return result
+
+
+def _octave_fold(notes: list[Note], *, window: int = 4, thresh: int = 10) -> list[Note]:
+    """Fold octave-error outliers down into the local register (monophonic stems).
+
+    CREPE occasionally locks onto a harmonic and reports a note an octave above the line;
+    on the staff it spikes up onto high ledger lines. A note sitting `thresh`+ semitones
+    above the median pitch of its temporal neighbours is almost certainly such an error in
+    a single-voice bass/vocal, so fold it down by whole octaves while that keeps bringing
+    it closer to the local median. Conservative: only clear outliers move, only by octaves
+    — a genuine leap of a fifth/sixth (below `thresh`) is left untouched."""
+    if len(notes) < 3:
+        return list(notes)
+    pitches = [n.pitch for n in notes]
+    out: list[Note] = []
+    for i, n in enumerate(notes):
+        lo = max(0, i - window)
+        hi = min(len(notes), i + window + 1)
+        neigh = sorted(pitches[j] for j in range(lo, hi) if j != i)
+        med = neigh[len(neigh) // 2]
+        p = n.pitch
+        while p - med >= thresh and abs((p - 12) - med) < abs(p - med):
+            p -= 12
+        out.append(n if p == n.pitch else n._replace(pitch=p))
+    return out
+
+
 def quantize_and_clean(notes, grid: Grid, *, monophonic: bool, subdiv: int = 4) -> list[Note]:
-    """Snap notes to a 16th grid, drop spurious ones, merge repeats, enforce monophony."""
+    """Snap notes to a 16th grid, drop spurious ones, merge repeats, enforce monophony.
+
+    Monophonic stems (bass, vocals) are additionally made legato: notes are extended
+    over sub-beat gaps to the next onset (see `_legato`) so the staff reads as connected
+    notes instead of a rest-riddled stutter.
+    """
     slot = _slot_seconds(grid, subdiv)
     kept = [Note(*n) for n in notes if (n[1] - n[0]) >= slot / 2]
     snapped: list[Note] = []
@@ -105,7 +153,9 @@ def quantize_and_clean(notes, grid: Grid, *, monophonic: bool, subdiv: int = 4) 
     snapped.sort(key=lambda n: (n.start, n.pitch))
     merged = _merge_same_pitch(snapped, slot)
     if monophonic:
+        merged = _octave_fold(merged)                          # fold CREPE octave jumps in
         merged = _enforce_monophony(merged, slot)
+        merged = _legato(merged, slot, max_gap_slots=subdiv)   # bridge < one-beat gaps
     return merged
 
 
